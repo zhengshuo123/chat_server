@@ -1,0 +1,80 @@
+# ==============================
+# Qt Creator
+# ==============================
+
+*.user
+*.user.*
+*.autosave
+.qtc_clangd/
+
+# ==============================
+# CMake build directories
+# ==============================
+
+build/
+build-*/
+cmake-build-*/
+out/
+
+# ==============================
+# CMake generated files
+# ==============================
+
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+CTestTestfile.cmake
+compile_commands.json
+Makefile
+
+# ==============================
+# Ninja generated files
+# ==============================
+
+build.ninja
+.ninja_deps
+.ninja_log
+
+# ==============================
+# Compiled files
+# ==============================
+
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+*.exe
+
+# ==============================
+# Debug information
+# ==============================
+
+*.pdb
+*.ilk
+*.exp
+
+# ==============================
+# Test output
+# ==============================
+
+Testing/
+
+# ==============================
+# Other IDE settings
+# ==============================
+
+.vscode/
+.vs/
+.idea/
+
+# ==============================
+# Operating system files
+# ==============================
+
+.DS_Store
+Thumbs.db
+desktop.ini
