@@ -86,6 +86,11 @@
 - Build passed and server tests passed.
 - End-to-end TCP heartbeat smoke test passed.
 
+### Stage 12 - Client Auto Reconnect Checkpoint
+
+- Server code was not changed in this client-only reconnect stage.
+- Server build and all server Qt Tests were rerun successfully.
+
 ## Next
 
 1. Add unread/read-state synchronization.
