@@ -49,10 +49,18 @@
 - Added Qt Test coverage proving users, conversations, and messages persist after closing and reopening the database.
 - Build passed and server tests passed: `protocolcodec`, `sqliterepository`.
 
+### Stage 7 - AuthService Password Hashing Foundation
+
+- Added `AuthService` with register and login verification paths.
+- Implemented PBKDF2-HMAC-SHA256 password hashing with per-user random salts and encoded iteration metadata.
+- Repository now exposes credential lookup without moving SQL into service logic.
+- Added Qt Test coverage for successful registration/login, wrong-password rejection, duplicate user rejection, short password rejection, and no plaintext password storage.
+- Build passed and server tests passed: `protocolcodec`, `sqliterepository`, `authservice`.
+
 ## Next
 
-1. Add `AuthService` with non-plain-text password hashing and formal register/login.
-2. Wire `SQLiteRepository` into `ChatServer` startup and message persistence.
+1. Wire `SQLiteRepository` and `AuthService` into `ChatServer` startup and formal register/login commands.
+2. Persist group/private messages through `SQLiteRepository`.
 3. Split connection handling into `ClientSession`.
 4. Add heartbeat, connection timeout, and duplicate `request_id` handling.
 
@@ -60,6 +68,6 @@
 
 - The new protocol module is tested but not yet wired into live networking.
 - Persistence foundation exists, but it is not yet wired into live `ChatServer` message/auth flows.
-- Password hashing is not implemented yet.
+- Password hashing exists in `AuthService`, but live server commands still use nickname-only login until the next integration stage.
 - Server responsibilities are still concentrated in `ChatServer`.
 - Clazy was attempted with Qt Creator's bundled `clazy-standalone.exe`, but the local Clang tooling failed before project analysis on MinGW system headers. This remains an environment/toolchain setup item; MinGW compilation itself succeeds.

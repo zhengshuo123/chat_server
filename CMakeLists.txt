@@ -44,6 +44,8 @@ add_executable(chat_server
     chatserver.cpp
     persistence/sqliterepository.h
     persistence/sqliterepository.cpp
+    services/authservice.h
+    services/authservice.cpp
 )
 
 target_link_libraries(chat_server PRIVATE
@@ -83,6 +85,25 @@ target_link_libraries(tst_sqliterepository PRIVATE
 add_test(
     NAME sqliterepository
     COMMAND tst_sqliterepository
+)
+
+add_executable(tst_authservice
+    tests/tst_authservice.cpp
+    persistence/sqliterepository.h
+    persistence/sqliterepository.cpp
+    services/authservice.h
+    services/authservice.cpp
+)
+
+target_link_libraries(tst_authservice PRIVATE
+    Qt${QT_VERSION_MAJOR}::Core
+    Qt${QT_VERSION_MAJOR}::Sql
+    Qt${QT_VERSION_MAJOR}::Test
+)
+
+add_test(
+    NAME authservice
+    COMMAND tst_authservice
 )
 
 include(GNUInstallDirs)

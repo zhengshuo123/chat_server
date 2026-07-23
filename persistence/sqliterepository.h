@@ -20,6 +20,14 @@ public:
         QString status;
     };
 
+    struct UserCredentials
+    {
+        qint64 id = 0;
+        QString username;
+        QString passwordHash;
+        QString passwordSalt;
+    };
+
     SQLiteRepository();
     ~SQLiteRepository();
 
@@ -37,6 +45,9 @@ public:
         const QString &passwordSalt);
 
     qint64 userId(
+        const QString &username) const;
+
+    UserCredentials credentialsForUser(
         const QString &username) const;
 
     bool createConversation(

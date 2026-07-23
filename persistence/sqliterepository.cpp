@@ -3,6 +3,7 @@
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QSqlRecord>
+#include <QVariant>
 #include <QUuid>
 
 namespace
@@ -200,6 +201,29 @@ qint64 SQLiteRepository::userId(
     }
 
     return query.value(0).toLongLong();
+}
+
+SQLiteRepository::UserCredentials SQLiteRepository::credentialsForUser(
+    const QString &username) const
+{
+    QSqlQuery query(m_database);
+    query.prepare(
+        QStringLiteral(
+            "SELECT id, username, password_hash, password_salt "
+            "FROM users WHERE username = :username"));
+    query.bindValue(QStringLiteral(":username"), username);
+
+    if (!query.exec() || !query.next())
+    {
+        return UserCredentials{};
+    }
+
+    UserCredentials credentials;
+    credentials.id = query.value(0).toLongLong();
+    credentials.username = query.value(1).toString();
+    credentials.passwordHash = query.value(2).toString();
+    credentials.passwordSalt = query.value(3).toString();
+    return credentials;
 }
 
 bool SQLiteRepository::createConversation(
