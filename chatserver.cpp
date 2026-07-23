@@ -4,9 +4,12 @@
 #include <QAbstractSocket>
 #include <QByteArray>
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QDateTime>
 #include <QDebug>
 #include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QHostAddress>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -335,6 +338,24 @@ void ChatServer::handleJsonMessage(
                 .value(QStringLiteral("data_base64"))
                 .toString());
 
+        return;
+    }
+
+    if (type == QStringLiteral("file_download"))
+    {
+        const QJsonValue attachmentIdValue =
+            normalizedObject.value(QStringLiteral("attachment_id"));
+        bool converted = false;
+        const qint64 attachmentId =
+            attachmentIdValue.isString()
+                ? attachmentIdValue.toString().toLongLong(&converted)
+                : static_cast<qint64>(attachmentIdValue.toDouble(0.0));
+
+        handleFileDownload(
+            clientSocket,
+            converted || !attachmentIdValue.isString()
+                ? attachmentId
+                : 0);
         return;
     }
 
@@ -899,6 +920,28 @@ void ChatServer::handleFileMessage(
         return;
     }
 
+    const QString storagePath =
+        attachmentStoragePath(trimmedFileName);
+    QFile storageFile(storagePath);
+
+    if (!storageFile.open(QIODevice::WriteOnly)
+        || storageFile.write(fileData) != fileData.size()
+        || !storageFile.flush())
+    {
+        storageFile.remove();
+        sendError(clientSocket, QStringLiteral("服务端保存文件失败"));
+        return;
+    }
+
+    storageFile.close();
+
+    const QString sha256 =
+        QString::fromLatin1(
+            QCryptographicHash::hash(
+                fileData,
+                QCryptographicHash::Sha256)
+                .toHex());
+
     QJsonObject fileChatObject;
     fileChatObject.insert(QStringLiteral("type"), QStringLiteral("file_chat"));
     fileChatObject.insert(QStringLiteral("from"), senderInfo.nickname);
@@ -910,28 +953,20 @@ void ChatServer::handleFileMessage(
 
     QString conversationId = QStringLiteral("hall");
 
-    if (trimmedTarget.isEmpty())
-    {
-        fileChatObject.insert(QStringLiteral("conversation_id"), conversationId);
-        broadcastJson(fileChatObject);
-    }
-    else
+    if (!trimmedTarget.isEmpty())
     {
         QTcpSocket *targetSocket =
             findClientByNickname(trimmedTarget);
 
         if (targetSocket == nullptr)
         {
+            QFile::remove(storagePath);
             sendError(clientSocket, QStringLiteral("私聊对象当前不在线"));
             return;
         }
 
         conversationId =
             directConversationId(senderInfo.nickname, trimmedTarget);
-        fileChatObject.insert(QStringLiteral("conversation_id"), conversationId);
-
-        sendJson(targetSocket, fileChatObject);
-        sendJson(clientSocket, fileChatObject);
 
         if (!m_repository.createConversation(
                 conversationId,
@@ -955,17 +990,117 @@ void ChatServer::handleFileMessage(
         }
     }
 
-    if (!m_repository.appendMessage(
+    const qint64 messageId =
+        m_repository.appendMessageReturningId(
             conversationId,
             senderInfo.nickname,
             QStringLiteral("file"),
             trimmedFileName,
             QStringLiteral("sent"),
-            QDateTime::currentDateTimeUtc()))
+            QDateTime::currentDateTimeUtc());
+
+    if (messageId == 0)
     {
         qWarning() << "Failed to persist file message:"
                    << m_repository.lastError();
+        QFile::remove(storagePath);
+        return;
     }
+
+    if (!m_repository.addAttachment(
+            messageId,
+            trimmedFileName,
+            QStringLiteral("application/octet-stream"),
+            size,
+            storagePath,
+            sha256))
+    {
+        qWarning() << "Failed to persist attachment:"
+                   << m_repository.lastError();
+        QFile::remove(storagePath);
+        return;
+    }
+
+    const QList<SQLiteRepository::StoredMessage> persistedMessages =
+        m_repository.messagesForConversation(conversationId, 1);
+
+    if (!persistedMessages.isEmpty())
+    {
+        fileChatObject.insert(
+            QStringLiteral("attachment_id"),
+            QString::number(persistedMessages.constLast().attachmentId));
+    }
+
+    fileChatObject.insert(QStringLiteral("conversation_id"), conversationId);
+
+    if (trimmedTarget.isEmpty())
+    {
+        broadcastJson(fileChatObject);
+    }
+    else
+    {
+        QTcpSocket *targetSocket =
+            findClientByNickname(trimmedTarget);
+
+        if (targetSocket != nullptr)
+        {
+            sendJson(targetSocket, fileChatObject);
+        }
+
+        sendJson(clientSocket, fileChatObject);
+    }
+}
+
+void ChatServer::handleFileDownload(
+    QTcpSocket *clientSocket,
+    qint64 attachmentId)
+{
+    auto clientIt =
+        m_clients.find(clientSocket);
+
+    if (clientIt == m_clients.end()
+        || !clientIt.value().loggedIn)
+    {
+        sendError(clientSocket, QStringLiteral("请先登录"));
+        return;
+    }
+
+    const SQLiteRepository::StoredAttachment attachment =
+        m_repository.attachment(attachmentId);
+
+    if (attachment.id == 0)
+    {
+        sendError(clientSocket, QStringLiteral("附件不存在"));
+        return;
+    }
+
+    QFile file(attachment.storagePath);
+
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        sendError(clientSocket, QStringLiteral("附件文件不可读"));
+        return;
+    }
+
+    const QByteArray fileData =
+        file.readAll();
+
+    if (fileData.size() != attachment.sizeBytes)
+    {
+        sendError(clientSocket, QStringLiteral("附件文件大小不一致"));
+        return;
+    }
+
+    QJsonObject resultObject;
+    resultObject.insert(QStringLiteral("type"), QStringLiteral("file_download_result"));
+    resultObject.insert(QStringLiteral("attachment_id"), QString::number(attachment.id));
+    resultObject.insert(QStringLiteral("file_name"), attachment.fileName);
+    resultObject.insert(QStringLiteral("size"), attachment.sizeBytes);
+    resultObject.insert(
+        QStringLiteral("data_base64"),
+        QString::fromLatin1(fileData.toBase64()));
+
+    sendJson(clientSocket, resultObject);
 }
 
 void ChatServer::handleHistoryRequest(
@@ -1008,6 +1143,20 @@ void ChatServer::handleHistoryRequest(
             QStringLiteral("created_at"),
             message.createdAt.toUTC().toString(Qt::ISODateWithMs));
         messageObject.insert(QStringLiteral("status"), message.status);
+
+        if (message.attachmentId > 0)
+        {
+            messageObject.insert(
+                QStringLiteral("attachment_id"),
+                QString::number(message.attachmentId));
+            messageObject.insert(
+                QStringLiteral("file_name"),
+                message.attachmentFileName);
+            messageObject.insert(
+                QStringLiteral("size"),
+                message.attachmentSizeBytes);
+        }
+
         messageArray.append(messageObject);
     }
 
@@ -1530,4 +1679,43 @@ bool ChatServer::nicknameInUse(
     }
 
     return false;
+}
+
+QString ChatServer::attachmentStoragePath(
+    const QString &fileName) const
+{
+    const QString attachmentRoot =
+        QDir(QCoreApplication::applicationDirPath())
+            .filePath(QStringLiteral("attachments"));
+
+    QDir().mkpath(attachmentRoot);
+
+    return QDir(attachmentRoot)
+        .filePath(
+            QStringLiteral("%1_%2")
+                .arg(
+                    QUuid::createUuid().toString(QUuid::WithoutBraces),
+                    safeAttachmentFileName(fileName)));
+}
+
+QString ChatServer::safeAttachmentFileName(
+    const QString &fileName) const
+{
+    QString safeName =
+        QFileInfo(fileName).fileName().trimmed();
+
+    if (safeName.isEmpty())
+    {
+        safeName = QStringLiteral("attachment.bin");
+    }
+
+    static const QString invalidCharacters =
+        QStringLiteral("<>:\"/\\|?*");
+
+    for (const QChar character : invalidCharacters)
+    {
+        safeName.replace(character, QLatin1Char('_'));
+    }
+
+    return safeName;
 }

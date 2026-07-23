@@ -335,6 +335,23 @@ bool SQLiteRepository::appendMessage(
     const QString &status,
     const QDateTime &createdAt)
 {
+    return appendMessageReturningId(
+        conversationId,
+        senderUsername,
+        kind,
+        content,
+        status,
+        createdAt) > 0;
+}
+
+qint64 SQLiteRepository::appendMessageReturningId(
+    const QString &conversationId,
+    const QString &senderUsername,
+    const QString &kind,
+    const QString &content,
+    const QString &status,
+    const QDateTime &createdAt)
+{
     const qint64 senderId =
         senderUsername.isEmpty()
             ? 0
@@ -359,10 +376,65 @@ bool SQLiteRepository::appendMessage(
     if (!query.exec())
     {
         m_lastError = query.lastError().text();
+        return 0;
+    }
+
+    return query.lastInsertId().toLongLong();
+}
+
+bool SQLiteRepository::addAttachment(
+    qint64 messageId,
+    const QString &fileName,
+    const QString &mimeType,
+    qint64 sizeBytes,
+    const QString &storagePath,
+    const QString &sha256)
+{
+    QSqlQuery query(m_database);
+    query.prepare(
+        QStringLiteral(
+            "INSERT INTO attachments(message_id, file_name, mime_type, size_bytes, storage_path, sha256) "
+            "VALUES(:message_id, :file_name, :mime_type, :size_bytes, :storage_path, :sha256)"));
+    query.bindValue(QStringLiteral(":message_id"), messageId);
+    query.bindValue(QStringLiteral(":file_name"), fileName);
+    query.bindValue(QStringLiteral(":mime_type"), mimeType);
+    query.bindValue(QStringLiteral(":size_bytes"), qMax<qint64>(0, sizeBytes));
+    query.bindValue(QStringLiteral(":storage_path"), storagePath);
+    query.bindValue(QStringLiteral(":sha256"), sha256);
+
+    if (!query.exec())
+    {
+        m_lastError = query.lastError().text();
         return false;
     }
 
     return true;
+}
+
+SQLiteRepository::StoredAttachment SQLiteRepository::attachment(
+    qint64 attachmentId) const
+{
+    QSqlQuery query(m_database);
+    query.prepare(
+        QStringLiteral(
+            "SELECT id, message_id, file_name, mime_type, size_bytes, storage_path, sha256 "
+            "FROM attachments WHERE id = :id"));
+    query.bindValue(QStringLiteral(":id"), attachmentId);
+
+    if (!query.exec()
+        || !query.next())
+    {
+        return StoredAttachment{};
+    }
+
+    return StoredAttachment{
+        query.value(0).toLongLong(),
+        query.value(1).toLongLong(),
+        query.value(2).toString(),
+        query.value(3).toString(),
+        query.value(4).toLongLong(),
+        query.value(5).toString(),
+        query.value(6).toString()};
 }
 
 QList<SQLiteRepository::StoredMessage> SQLiteRepository::messagesForConversation(
@@ -373,9 +445,11 @@ QList<SQLiteRepository::StoredMessage> SQLiteRepository::messagesForConversation
     query.prepare(
         QStringLiteral(
             "SELECT m.id, m.conversation_id, COALESCE(u.username, ''), m.kind, "
-            "m.content, m.created_at, m.status "
+            "m.content, m.created_at, m.status, "
+            "COALESCE(a.id, 0), COALESCE(a.file_name, ''), COALESCE(a.size_bytes, 0) "
             "FROM messages m "
             "LEFT JOIN users u ON u.id = m.sender_user_id "
+            "LEFT JOIN attachments a ON a.message_id = m.id "
             "WHERE m.conversation_id = :conversation_id "
             "ORDER BY m.id DESC "
             "LIMIT :limit"));
@@ -402,6 +476,9 @@ QList<SQLiteRepository::StoredMessage> SQLiteRepository::messagesForConversation
                 query.value(5).toString(),
                 Qt::ISODateWithMs);
         message.status = query.value(6).toString();
+        message.attachmentId = query.value(7).toLongLong();
+        message.attachmentFileName = query.value(8).toString();
+        message.attachmentSizeBytes = query.value(9).toLongLong();
         messages.prepend(message);
     }
 

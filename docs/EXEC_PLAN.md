@@ -174,15 +174,25 @@
 - Client `windeployqt` package was regenerated after Qt Sql support was added.
 - Client package includes the SQLite driver at `sqldrivers/qsqlite.dll`.
 
+### Stage 25 - Server Attachment Storage And Download
+
+- File messages are now saved as durable server attachments under the server application `attachments` directory.
+- `SQLiteRepository` can return inserted message IDs, persist attachment metadata, and load attachment metadata with history messages.
+- Added `file_download` handling and `file_download_result` responses so clients can retrieve persisted attachments after restart.
+- History responses now include `attachment_id`, file name, and size for file messages.
+- Private file sends clean up the saved file when the target is offline or database persistence fails, avoiding orphaned attachment files.
+- Added Qt Test coverage for attachment metadata persistence and lookup.
+- Server build, all server Qt Tests, and server Clazy passed.
+- Client build, all client Qt Tests, and client Clazy passed as the download-consumer checkpoint.
+
 ## Next
 
 1. Split connection handling into `ClientSession`.
-2. Replace inline file transfer with chunked attachment storage.
+2. Replace bounded inline file payloads with chunked upload/download and real progress.
 3. Remove nickname-only login compatibility once migration is no longer needed.
 
 ## Honest Gaps
 
-- The new protocol module is tested but not yet wired into live networking.
 - Live register/login is wired for password-based accounts; nickname-only login remains temporarily for migration and should be removed once the client no longer needs compatibility.
 - Server responsibilities are still concentrated in `ChatServer`.
 - Clazy is not in `PATH`, but Qt Creator's bundled `clazy-standalone.exe` works when invoked with explicit MinGW target/include arguments.

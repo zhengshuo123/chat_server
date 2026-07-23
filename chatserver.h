@@ -77,6 +77,10 @@ private:
         qint64 size,
         const QString &base64Data);
 
+    void handleFileDownload(
+        QTcpSocket *clientSocket,
+        qint64 attachmentId);
+
     void handleHistoryRequest(
         QTcpSocket *clientSocket,
         const QString &conversationId,
@@ -130,6 +134,12 @@ private:
     bool nicknameInUse(
         const QString &nickname,
         QTcpSocket *excludedSocket = nullptr) const;
+
+    QString attachmentStoragePath(
+        const QString &fileName) const;
+
+    QString safeAttachmentFileName(
+        const QString &fileName) const;
 
 private:
     QHash<QTcpSocket *, ClientInfo> m_clients;

@@ -13,6 +13,7 @@ private slots:
     void persistsUsersConversationsAndMessages();
     void tracksReadState();
     void listsConversationsForMember();
+    void persistsAttachmentMetadata();
 };
 
 void SQLiteRepositoryTest::persistsUsersConversationsAndMessages()
@@ -239,6 +240,70 @@ void SQLiteRepositoryTest::listsConversationsForMember()
     QCOMPARE(conversations.at(0).id, QStringLiteral("hall"));
     QCOMPARE(conversations.at(1).id, QStringLiteral("dm:alice:bob"));
     QCOMPARE(conversations.at(1).unreadCount, 1);
+
+    QFile::remove(databasePath);
+    QFile::remove(databasePath + QStringLiteral("-wal"));
+    QFile::remove(databasePath + QStringLiteral("-shm"));
+}
+
+void SQLiteRepositoryTest::persistsAttachmentMetadata()
+{
+    const QString tempRoot =
+        QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+    const QString databasePath =
+        QDir(tempRoot).filePath(
+            QStringLiteral("chat_repository_attachment_%1.sqlite")
+                .arg(QDateTime::currentMSecsSinceEpoch()));
+
+    SQLiteRepository repository;
+    QVERIFY2(
+        repository.open(databasePath, QStringLiteral("repo_attachment")),
+        qPrintable(repository.lastError()));
+    QVERIFY2(repository.initializeSchema(), qPrintable(repository.lastError()));
+    QVERIFY2(
+        repository.createUser(
+            QStringLiteral("alice"),
+            QStringLiteral("hash"),
+            QStringLiteral("salt")),
+        qPrintable(repository.lastError()));
+    QVERIFY2(
+        repository.createConversation(
+            QStringLiteral("hall"),
+            QStringLiteral("group"),
+            QStringLiteral("公共聊天室")),
+        qPrintable(repository.lastError()));
+
+    const qint64 messageId =
+        repository.appendMessageReturningId(
+            QStringLiteral("hall"),
+            QStringLiteral("alice"),
+            QStringLiteral("file"),
+            QStringLiteral("notes.txt"),
+            QStringLiteral("sent"),
+            QDateTime::currentDateTimeUtc());
+    QVERIFY(messageId > 0);
+    QVERIFY2(
+        repository.addAttachment(
+            messageId,
+            QStringLiteral("notes.txt"),
+            QStringLiteral("text/plain"),
+            12,
+            QStringLiteral("C:/tmp/notes.txt"),
+            QStringLiteral("abc")),
+        qPrintable(repository.lastError()));
+
+    const QList<SQLiteRepository::StoredMessage> messages =
+        repository.messagesForConversation(QStringLiteral("hall"), 20);
+    QCOMPARE(messages.size(), 1);
+    QCOMPARE(messages.at(0).attachmentFileName, QStringLiteral("notes.txt"));
+    QCOMPARE(messages.at(0).attachmentSizeBytes, 12);
+    QVERIFY(messages.at(0).attachmentId > 0);
+
+    const SQLiteRepository::StoredAttachment attachment =
+        repository.attachment(messages.at(0).attachmentId);
+    QCOMPARE(attachment.messageId, messageId);
+    QCOMPARE(attachment.fileName, QStringLiteral("notes.txt"));
+    QCOMPARE(attachment.storagePath, QStringLiteral("C:/tmp/notes.txt"));
 
     QFile::remove(databasePath);
     QFile::remove(databasePath + QStringLiteral("-wal"));

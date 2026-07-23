@@ -18,6 +18,9 @@ public:
         QString content;
         QDateTime createdAt;
         QString status;
+        qint64 attachmentId = 0;
+        QString attachmentFileName;
+        qint64 attachmentSizeBytes = 0;
     };
 
     struct StoredConversation
@@ -34,6 +37,17 @@ public:
         QString username;
         QString passwordHash;
         QString passwordSalt;
+    };
+
+    struct StoredAttachment
+    {
+        qint64 id = 0;
+        qint64 messageId = 0;
+        QString fileName;
+        QString mimeType;
+        qint64 sizeBytes = 0;
+        QString storagePath;
+        QString sha256;
     };
 
     SQLiteRepository();
@@ -77,6 +91,25 @@ public:
         const QString &content,
         const QString &status,
         const QDateTime &createdAt);
+
+    qint64 appendMessageReturningId(
+        const QString &conversationId,
+        const QString &senderUsername,
+        const QString &kind,
+        const QString &content,
+        const QString &status,
+        const QDateTime &createdAt);
+
+    bool addAttachment(
+        qint64 messageId,
+        const QString &fileName,
+        const QString &mimeType,
+        qint64 sizeBytes,
+        const QString &storagePath,
+        const QString &sha256);
+
+    StoredAttachment attachment(
+        qint64 attachmentId) const;
 
     QList<StoredMessage> messagesForConversation(
         const QString &conversationId,
