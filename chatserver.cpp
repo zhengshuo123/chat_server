@@ -534,24 +534,27 @@ void ChatServer::handleLogin(
         return;
     }
 
-    if (!password.isEmpty())
+    if (password.isEmpty())
     {
-        if (!m_authService)
-        {
-            sendLoginError(QStringLiteral("认证服务不可用"));
-            return;
-        }
+        sendLoginError(QStringLiteral("密码不能为空"));
+        return;
+    }
 
-        const AuthService::Result result =
-            m_authService->verifyLogin(
-                trimmedNickname,
-                password);
+    if (!m_authService)
+    {
+        sendLoginError(QStringLiteral("认证服务不可用"));
+        return;
+    }
 
-        if (!result.success)
-        {
-            sendLoginError(result.message);
-            return;
-        }
+    const AuthService::Result result =
+        m_authService->verifyLogin(
+            trimmedNickname,
+            password);
+
+    if (!result.success)
+    {
+        sendLoginError(result.message);
+        return;
     }
 
     completeLogin(clientSocket, trimmedNickname);
