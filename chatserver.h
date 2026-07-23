@@ -1,9 +1,13 @@
 #ifndef CHATSERVER_H
 #define CHATSERVER_H
 
+#include "persistence/sqliterepository.h"
+#include "services/authservice.h"
+
 #include <QHash>
 #include <QByteArray>
 #include <QJsonObject>
+#include <memory>
 #include <QString>
 #include <QStringList>
 #include <QTcpServer>
@@ -40,7 +44,17 @@ private:
 
     void handleLogin(
         QTcpSocket *clientSocket,
-        const QString &nickname);
+        const QString &username,
+        const QString &password);
+
+    void handleRegister(
+        QTcpSocket *clientSocket,
+        const QString &username,
+        const QString &password);
+
+    void completeLogin(
+        QTcpSocket *clientSocket,
+        const QString &username);
 
     void handleChatMessage(
         QTcpSocket *clientSocket,
@@ -84,6 +98,8 @@ private:
 
     quint16 m_port;
     QTcpServer m_server;
+    SQLiteRepository m_repository;
+    std::unique_ptr<AuthService> m_authService;
 };
 
 #endif // CHATSERVER_H

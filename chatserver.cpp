@@ -3,8 +3,10 @@
 
 #include <QAbstractSocket>
 #include <QByteArray>
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDebug>
+#include <QDir>
 #include <QHostAddress>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -49,6 +51,39 @@ ChatServer::ChatServer(quint16 port)
 
 bool ChatServer::start()
 {
+    const QString databasePath =
+        QDir(QCoreApplication::applicationDirPath())
+            .filePath(QStringLiteral("chat_server.sqlite"));
+
+    if (!m_repository.open(
+            databasePath,
+            QStringLiteral("chat_server_main")))
+    {
+        qCritical() << "Database open failed:"
+                    << m_repository.lastError();
+        return false;
+    }
+
+    if (!m_repository.initializeSchema())
+    {
+        qCritical() << "Database schema initialization failed:"
+                    << m_repository.lastError();
+        return false;
+    }
+
+    if (!m_repository.createConversation(
+            QStringLiteral("hall"),
+            QStringLiteral("group"),
+            QStringLiteral("公共聊天室")))
+    {
+        qCritical() << "Hall conversation initialization failed:"
+                    << m_repository.lastError();
+        return false;
+    }
+
+    m_authService =
+        std::make_unique<AuthService>(m_repository);
+
     if (!m_server.listen(
             QHostAddress::AnyIPv4,
             m_port))
@@ -176,14 +211,38 @@ void ChatServer::handleJsonMessage(
 
     if (type == QStringLiteral("login"))
     {
-        const QString nickname =
+        const QString username =
             normalizedObject
                 .value(QStringLiteral("nickname"))
+                .toString();
+        const QString password =
+            normalizedObject
+                .value(QStringLiteral("password"))
                 .toString();
 
         handleLogin(
             clientSocket,
-            nickname);
+            username,
+            password);
+
+        return;
+    }
+
+    if (type == QStringLiteral("register"))
+    {
+        const QString username =
+            normalizedObject
+                .value(QStringLiteral("nickname"))
+                .toString();
+        const QString password =
+            normalizedObject
+                .value(QStringLiteral("password"))
+                .toString();
+
+        handleRegister(
+            clientSocket,
+            username,
+            password);
 
         return;
     }
@@ -230,7 +289,8 @@ void ChatServer::handleJsonMessage(
 
 void ChatServer::handleLogin(
     QTcpSocket *clientSocket,
-    const QString &nickname)
+    const QString &username,
+    const QString &password)
 {
     auto clientIt =
         m_clients.find(clientSocket);
@@ -276,7 +336,7 @@ void ChatServer::handleLogin(
     }
 
     const QString trimmedNickname =
-        nickname.trimmed();
+        username.trimmed();
 
     if (trimmedNickname.isEmpty())
     {
@@ -318,13 +378,110 @@ void ChatServer::handleLogin(
         return;
     }
 
+    if (!password.isEmpty())
+    {
+        if (!m_authService)
+        {
+            sendLoginError(QStringLiteral("认证服务不可用"));
+            return;
+        }
+
+        const AuthService::Result result =
+            m_authService->verifyLogin(
+                trimmedNickname,
+                password);
+
+        if (!result.success)
+        {
+            sendLoginError(result.message);
+            return;
+        }
+    }
+
+    completeLogin(clientSocket, trimmedNickname);
+}
+
+void ChatServer::handleRegister(
+    QTcpSocket *clientSocket,
+    const QString &username,
+    const QString &password)
+{
+    if (!m_authService)
+    {
+        sendError(
+            clientSocket,
+            QStringLiteral("认证服务不可用"));
+        return;
+    }
+
+    const QString trimmedUsername =
+        username.trimmed();
+
+    if (trimmedUsername.length() >
+        maxNicknameLength)
+    {
+        sendError(
+            clientSocket,
+            QStringLiteral("用户名不能超过20个字符"));
+        return;
+    }
+
+    if (nicknameInUse(
+            trimmedUsername,
+            clientSocket))
+    {
+        sendError(
+            clientSocket,
+            QStringLiteral("该用户已经在线"));
+        return;
+    }
+
+    const AuthService::Result result =
+        m_authService->registerUser(
+            trimmedUsername,
+            password);
+
+    if (!result.success)
+    {
+        QJsonObject resultObject;
+        resultObject.insert(
+            QStringLiteral("type"),
+            QStringLiteral("login_result"));
+        resultObject.insert(
+            QStringLiteral("success"),
+            false);
+        resultObject.insert(
+            QStringLiteral("reason"),
+            result.message);
+        sendJson(clientSocket, resultObject);
+        return;
+    }
+
+    completeLogin(clientSocket, trimmedUsername);
+}
+
+void ChatServer::completeLogin(
+    QTcpSocket *clientSocket,
+    const QString &username)
+{
+    auto clientIt =
+        m_clients.find(clientSocket);
+
+    if (clientIt == m_clients.end())
+    {
+        return;
+    }
+
+    ClientInfo &clientInfo =
+        clientIt.value();
+
     clientInfo.nickname =
-        trimmedNickname;
+        username;
 
     clientInfo.loggedIn = true;
 
     qInfo() << "Client logged in:"
-            << trimmedNickname
+            << username
             << clientSocket->peerAddress().toString()
             << ":"
             << clientSocket->peerPort();
@@ -345,7 +502,7 @@ void ChatServer::handleLogin(
 
     broadcastSystemMessage(
         QStringLiteral("%1 上线了")
-            .arg(trimmedNickname));
+            .arg(username));
 
     broadcastUserList();
 }
@@ -417,6 +574,18 @@ void ChatServer::handleChatMessage(
         currentTimestamp());
 
     broadcastJson(chatObject);
+
+    if (!m_repository.appendMessage(
+            QStringLiteral("hall"),
+            clientInfo.nickname,
+            QStringLiteral("text"),
+            trimmedMessage,
+            QStringLiteral("sent"),
+            QDateTime::currentDateTimeUtc()))
+    {
+        qWarning() << "Failed to persist group message:"
+                   << m_repository.lastError();
+    }
 }
 
 void ChatServer::handlePrivateMessage(

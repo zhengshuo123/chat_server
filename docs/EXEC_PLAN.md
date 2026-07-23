@@ -57,10 +57,18 @@
 - Added Qt Test coverage for successful registration/login, wrong-password rejection, duplicate user rejection, short password rejection, and no plaintext password storage.
 - Build passed and server tests passed: `protocolcodec`, `sqliterepository`, `authservice`.
 
+### Stage 8 - Live Register/Login Integration
+
+- `ChatServer` now opens `chat_server.sqlite` on startup, initializes schema, and creates the hall conversation.
+- Added live `register` command using `AuthService`; successful registration logs the connection in.
+- Added password-aware `login` command using `AuthService` while preserving existing nickname-only compatibility during migration.
+- Group messages are now persisted into the hall conversation.
+- End-to-end TCP smoke test passed for register, server restart, and login using the persisted account.
+
 ## Next
 
-1. Wire `SQLiteRepository` and `AuthService` into `ChatServer` startup and formal register/login commands.
-2. Persist group/private messages through `SQLiteRepository`.
+1. Persist private messages and direct conversation metadata through `SQLiteRepository`.
+2. Load history messages on login/session switch.
 3. Split connection handling into `ClientSession`.
 4. Add heartbeat, connection timeout, and duplicate `request_id` handling.
 
@@ -68,6 +76,6 @@
 
 - The new protocol module is tested but not yet wired into live networking.
 - Persistence foundation exists, but it is not yet wired into live `ChatServer` message/auth flows.
-- Password hashing exists in `AuthService`, but live server commands still use nickname-only login until the next integration stage.
+- Live register/login is wired for password-based accounts; nickname-only login remains temporarily for migration and should be removed once the client no longer needs compatibility.
 - Server responsibilities are still concentrated in `ChatServer`.
 - Clazy was attempted with Qt Creator's bundled `clazy-standalone.exe`, but the local Clang tooling failed before project analysis on MinGW system headers. This remains an environment/toolchain setup item; MinGW compilation itself succeeds.
