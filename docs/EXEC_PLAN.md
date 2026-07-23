@@ -211,6 +211,12 @@
 - Server build, all server Qt Tests, and server Clazy were rerun successfully.
 - Client now renders thumbnails for locally cached image attachments while preserving generic cards for other files.
 
+### Stage 29 - Client Model Upgrade Checkpoint
+
+- Server code was not changed in this client-focused model stage.
+- Server build, all server Qt Tests, and server Clazy were rerun successfully.
+- Client conversation and message state now inherit `QAbstractListModel` while preserving existing Widget rendering behavior.
+
 ## Next
 
 1. Split connection handling into `ClientSession`.
