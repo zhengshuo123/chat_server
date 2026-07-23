@@ -2,6 +2,7 @@
 #define CHATSERVER_H
 
 #include <QHash>
+#include <QByteArray>
 #include <QJsonObject>
 #include <QString>
 #include <QStringList>
@@ -21,6 +22,7 @@ private:
     {
         QString nickname;
         bool loggedIn = false;
+        QByteArray inputBuffer;
     };
 
 private:
@@ -32,6 +34,9 @@ private:
     void handleJsonMessage(
         QTcpSocket *clientSocket,
         const QJsonObject &messageObject);
+
+    QJsonObject normalizeMessage(
+        const QJsonObject &messageObject) const;
 
     void handleLogin(
         QTcpSocket *clientSocket,

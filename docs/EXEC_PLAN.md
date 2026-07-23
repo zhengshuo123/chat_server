@@ -32,12 +32,20 @@
 - Server code was not changed in this client-only model extraction stage.
 - Server build and `protocolcodec` Qt Test were rerun successfully.
 
+### Stage 5 - Wire Length-Prefixed JSON Protocol
+
+- Updated `ChatServer` to use `ProtocolCodec` for outbound frames.
+- Added per-client input buffers and decode loops for partial frames, concatenated frames, invalid frames, and oversized buffered input.
+- Normalized envelope payloads before existing command dispatch.
+- Build passed and server `protocolcodec` Qt Test passed.
+- Real TCP smoke test passed with envelope login and server responses: `login_result`, `system`, `user_list`.
+
 ## Next
 
-1. Integrate `ProtocolCodec` into `ChatServer` and introduce per-client input buffers.
-2. Split connection handling into `ClientSession`.
-3. Add SQLite repositories with WAL, foreign keys, transactions, users, conversations, messages, read state, and attachments.
-4. Add `AuthService` with non-plain-text password hashing and formal register/login.
+1. Split connection handling into `ClientSession`.
+2. Add SQLite repositories with WAL, foreign keys, transactions, users, conversations, messages, read state, and attachments.
+3. Add `AuthService` with non-plain-text password hashing and formal register/login.
+4. Add heartbeat, connection timeout, and duplicate `request_id` handling.
 
 ## Honest Gaps
 

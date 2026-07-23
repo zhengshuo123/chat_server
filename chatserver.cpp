@@ -1,4 +1,5 @@
 #include "chatserver.h"
+#include "protocol/protocolcodec.h"
 
 #include <QAbstractSocket>
 #include <QByteArray>
@@ -9,12 +10,13 @@
 #include <QJsonDocument>
 #include <QJsonParseError>
 #include <QObject>
+#include <QUuid>
 #include <QTcpSocket>
 
 namespace
 {
 constexpr qint64 maxProtocolLineBytes =
-    64 * 1024;
+    ProtocolCodec::maxFrameBytes;
 
 constexpr int maxNicknameLength = 20;
 constexpr int maxMessageLength = 500;
@@ -112,59 +114,44 @@ void ChatServer::handleNewConnections()
 void ChatServer::handleReadyRead(
     QTcpSocket *clientSocket)
 {
-    while (clientSocket->canReadLine())
+    auto clientIt =
+        m_clients.find(clientSocket);
+
+    if (clientIt == m_clients.end())
     {
-        QByteArray lineData =
-            clientSocket->readLine(
-                maxProtocolLineBytes + 1);
-
-        if (lineData.size() >
-            maxProtocolLineBytes)
-        {
-            sendError(
-                clientSocket,
-                QStringLiteral("协议消息过长"));
-
-            clientSocket->disconnectFromHost();
-
-            return;
-        }
-
-        if (lineData.endsWith('\n'))
-        {
-            lineData.chop(1);
-        }
-
-        if (lineData.endsWith('\r'))
-        {
-            lineData.chop(1);
-        }
-
-        QJsonParseError parseError;
-
-        const QJsonDocument document =
-            QJsonDocument::fromJson(
-                lineData,
-                &parseError);
-
-        if (parseError.error !=
-                QJsonParseError::NoError
-            || !document.isObject())
-        {
-            sendError(
-                clientSocket,
-                QStringLiteral(
-                    "收到无效的 JSON 消息"));
-
-            continue;
-        }
-
-        handleJsonMessage(
-            clientSocket,
-            document.object());
+        return;
     }
 
-    if (clientSocket->bytesAvailable() >
+    ClientInfo &clientInfo =
+        clientIt.value();
+
+    clientInfo.inputBuffer.append(
+        clientSocket->readAll());
+
+    while (true)
+    {
+        ProtocolCodec::DecodeResult result =
+            ProtocolCodec::tryDecode(
+                clientInfo.inputBuffer);
+
+        if (result.status ==
+            ProtocolCodec::DecodeStatus::NeedMoreData)
+        {
+            break;
+        }
+
+        if (result.status ==
+            ProtocolCodec::DecodeStatus::InvalidFrame)
+        {
+            sendError(clientSocket, result.error);
+            clientSocket->disconnectFromHost();
+            break;
+        }
+
+        handleJsonMessage(clientSocket, result.message);
+    }
+
+    if (clientInfo.inputBuffer.size() >
         maxProtocolLineBytes)
     {
         sendError(
@@ -179,15 +166,18 @@ void ChatServer::handleJsonMessage(
     QTcpSocket *clientSocket,
     const QJsonObject &messageObject)
 {
+    const QJsonObject normalizedObject =
+        normalizeMessage(messageObject);
+
     const QString type =
-        messageObject
+        normalizedObject
             .value(QStringLiteral("type"))
             .toString();
 
     if (type == QStringLiteral("login"))
     {
         const QString nickname =
-            messageObject
+            normalizedObject
                 .value(QStringLiteral("nickname"))
                 .toString();
 
@@ -201,7 +191,7 @@ void ChatServer::handleJsonMessage(
     if (type == QStringLiteral("message"))
     {
         const QString message =
-            messageObject
+            normalizedObject
                 .value(QStringLiteral("content"))
                 .toString();
 
@@ -216,12 +206,12 @@ void ChatServer::handleJsonMessage(
         QStringLiteral("private_message"))
     {
         const QString targetNickname =
-            messageObject
+            normalizedObject
                 .value(QStringLiteral("target"))
                 .toString();
 
         const QString message =
-            messageObject
+            normalizedObject
                 .value(QStringLiteral("content"))
                 .toString();
 
@@ -610,14 +600,34 @@ void ChatServer::sendJson(
         return;
     }
 
-    const QJsonDocument document(
-        messageObject);
+    const QString type =
+        messageObject
+            .value(QStringLiteral("type"))
+            .toString();
 
-    QByteArray data =
-        document.toJson(
-            QJsonDocument::Compact);
+    if (type.isEmpty())
+    {
+        return;
+    }
 
-    data.append('\n');
+    QJsonObject payload = messageObject;
+    payload.remove(QStringLiteral("type"));
+
+    const QJsonObject envelope =
+        ProtocolCodec::createEnvelope(
+            type,
+            QUuid::createUuid().toString(
+                QUuid::WithoutBraces),
+            payload);
+
+    const QByteArray data =
+        ProtocolCodec::encode(envelope);
+
+    if (data.isEmpty())
+    {
+        qWarning() << "Failed to encode protocol frame";
+        return;
+    }
 
     const qint64 bytesWritten =
         clientSocket->write(data);
@@ -627,6 +637,46 @@ void ChatServer::sendJson(
         qWarning() << "Failed to send data:"
                    << clientSocket->errorString();
     }
+}
+
+QJsonObject ChatServer::normalizeMessage(
+    const QJsonObject &messageObject) const
+{
+    const QString envelopeType =
+        messageObject
+            .value(QStringLiteral("type"))
+            .toString();
+
+    if (!messageObject.contains(QStringLiteral("version"))
+        || !messageObject.value(QStringLiteral("payload")).isObject())
+    {
+        return messageObject;
+    }
+
+    QJsonObject normalized =
+        messageObject
+            .value(QStringLiteral("payload"))
+            .toObject();
+
+    normalized.insert(
+        QStringLiteral("type"),
+        envelopeType);
+
+    if (messageObject.contains(QStringLiteral("timestamp")))
+    {
+        normalized.insert(
+            QStringLiteral("timestamp"),
+            messageObject.value(QStringLiteral("timestamp")));
+    }
+
+    if (messageObject.contains(QStringLiteral("request_id")))
+    {
+        normalized.insert(
+            QStringLiteral("request_id"),
+            messageObject.value(QStringLiteral("request_id")));
+    }
+
+    return normalized;
 }
 
 void ChatServer::sendError(
