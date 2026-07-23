@@ -22,6 +22,11 @@
 - Upgraded the CMake language level to C++20.
 - Build and Qt Test passed after the changes.
 
+### Stage 3 - Client UI Prototype Checkpoint
+
+- Server code was not changed in this UI-only stage.
+- Server build and `protocolcodec` Qt Test were rerun successfully to keep both repositories verified.
+
 ## Next
 
 1. Integrate `ProtocolCodec` into `ChatServer` and introduce per-client input buffers.
