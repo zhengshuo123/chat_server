@@ -65,6 +65,11 @@ private:
         const QString &targetNickname,
         const QString &message);
 
+    void handleHistoryRequest(
+        QTcpSocket *clientSocket,
+        const QString &conversationId,
+        int limit);
+
     void handleDisconnected(
         QTcpSocket *clientSocket);
 

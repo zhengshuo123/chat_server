@@ -282,6 +282,25 @@ void ChatServer::handleJsonMessage(
         return;
     }
 
+    if (type == QStringLiteral("history"))
+    {
+        const QString conversationId =
+            normalizedObject
+                .value(QStringLiteral("conversation_id"))
+                .toString(QStringLiteral("hall"));
+        const int limit =
+            normalizedObject
+                .value(QStringLiteral("limit"))
+                .toInt(50);
+
+        handleHistoryRequest(
+            clientSocket,
+            conversationId,
+            limit);
+
+        return;
+    }
+
     sendError(
         clientSocket,
         QStringLiteral("无法识别的消息类型"));
@@ -706,6 +725,57 @@ void ChatServer::handlePrivateMessage(
             << trimmedTarget
             << ":"
             << trimmedMessage;
+}
+
+void ChatServer::handleHistoryRequest(
+    QTcpSocket *clientSocket,
+    const QString &conversationId,
+    int limit)
+{
+    auto clientIt =
+        m_clients.find(clientSocket);
+
+    if (clientIt == m_clients.end()
+        || !clientIt.value().loggedIn)
+    {
+        sendError(
+            clientSocket,
+            QStringLiteral("请先登录"));
+        return;
+    }
+
+    const QString normalizedConversationId =
+        conversationId.trimmed().isEmpty()
+            ? QStringLiteral("hall")
+            : conversationId.trimmed();
+    const QList<SQLiteRepository::StoredMessage> messages =
+        m_repository.messagesForConversation(
+            normalizedConversationId,
+            qBound(1, limit, 100));
+
+    QJsonArray messageArray;
+
+    for (const SQLiteRepository::StoredMessage &message : messages)
+    {
+        QJsonObject messageObject;
+        messageObject.insert(QStringLiteral("id"), QString::number(message.id));
+        messageObject.insert(QStringLiteral("conversation_id"), message.conversationId);
+        messageObject.insert(QStringLiteral("sender"), message.senderUsername);
+        messageObject.insert(QStringLiteral("kind"), message.kind);
+        messageObject.insert(QStringLiteral("content"), message.content);
+        messageObject.insert(
+            QStringLiteral("created_at"),
+            message.createdAt.toUTC().toString(Qt::ISODateWithMs));
+        messageObject.insert(QStringLiteral("status"), message.status);
+        messageArray.append(messageObject);
+    }
+
+    QJsonObject resultObject;
+    resultObject.insert(QStringLiteral("type"), QStringLiteral("history_result"));
+    resultObject.insert(QStringLiteral("conversation_id"), normalizedConversationId);
+    resultObject.insert(QStringLiteral("messages"), messageArray);
+
+    sendJson(clientSocket, resultObject);
 }
 
 void ChatServer::handleDisconnected(

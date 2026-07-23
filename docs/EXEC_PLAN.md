@@ -65,10 +65,16 @@
 - Group messages are now persisted into the hall conversation.
 - End-to-end TCP smoke test passed for register, server restart, and login using the persisted account.
 
+### Stage 9 - Hall History Loading
+
+- Added live `history` request handling for the hall conversation.
+- Server returns `history_result` with persisted message metadata and content.
+- End-to-end TCP smoke test passed for register, send hall message, request history, and verify the persisted message is returned.
+
 ## Next
 
 1. Persist private messages and direct conversation metadata through `SQLiteRepository`.
-2. Load history messages on login/session switch.
+2. Add private conversation history loading.
 3. Split connection handling into `ClientSession`.
 4. Add heartbeat, connection timeout, and duplicate `request_id` handling.
 
