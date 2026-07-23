@@ -27,6 +27,11 @@
 - Server code was not changed in this UI-only stage.
 - Server build and `protocolcodec` Qt Test were rerun successfully to keep both repositories verified.
 
+### Stage 4 - Client Model Extraction Checkpoint
+
+- Server code was not changed in this client-only model extraction stage.
+- Server build and `protocolcodec` Qt Test were rerun successfully.
+
 ## Next
 
 1. Integrate `ProtocolCodec` into `ChatServer` and introduce per-client input buffers.
