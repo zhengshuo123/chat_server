@@ -14,6 +14,7 @@
 #include <QObject>
 #include <QUuid>
 #include <QTcpSocket>
+#include <QTimer>
 
 namespace
 {
@@ -22,6 +23,7 @@ constexpr qint64 maxProtocolLineBytes =
 
 constexpr int maxNicknameLength = 20;
 constexpr int maxMessageLength = 500;
+constexpr int connectionTimeoutSeconds = 45;
 
 QString currentTimestamp()
 {
@@ -38,6 +40,7 @@ QString currentTimestamp()
 
 ChatServer::ChatServer(quint16 port)
     : m_port(port)
+    , m_timeoutTimer(new QTimer(&m_server))
 {
     QObject::connect(
         &m_server,
@@ -46,6 +49,16 @@ ChatServer::ChatServer(quint16 port)
         [this]()
         {
             handleNewConnections();
+        });
+
+    m_timeoutTimer->setInterval(10000);
+    QObject::connect(
+        m_timeoutTimer,
+        &QTimer::timeout,
+        &m_server,
+        [this]()
+        {
+            checkConnectionTimeouts();
         });
 }
 
@@ -99,6 +112,8 @@ bool ChatServer::start()
             << ":"
             << m_server.serverPort();
 
+    m_timeoutTimer->start();
+
     return true;
 }
 
@@ -116,7 +131,11 @@ void ChatServer::handleNewConnections()
 
         m_clients.insert(
             clientSocket,
-            ClientInfo{});
+            ClientInfo{
+                QString{},
+                false,
+                QByteArray{},
+                QDateTime::currentDateTimeUtc()});
 
         qInfo() << "New TCP connection:"
                 << clientSocket->peerAddress().toString()
@@ -162,6 +181,8 @@ void ChatServer::handleReadyRead(
 
     clientInfo.inputBuffer.append(
         clientSocket->readAll());
+    clientInfo.lastActivityUtc =
+        QDateTime::currentDateTimeUtc();
 
     while (true)
     {
@@ -298,6 +319,12 @@ void ChatServer::handleJsonMessage(
             conversationId,
             limit);
 
+        return;
+    }
+
+    if (type == QStringLiteral("ping"))
+    {
+        handlePing(clientSocket);
         return;
     }
 
@@ -806,6 +833,49 @@ void ChatServer::handleHistoryRequest(
     resultObject.insert(QStringLiteral("messages"), messageArray);
 
     sendJson(clientSocket, resultObject);
+}
+
+void ChatServer::handlePing(
+    QTcpSocket *clientSocket)
+{
+    auto clientIt =
+        m_clients.find(clientSocket);
+
+    if (clientIt != m_clients.end())
+    {
+        clientIt.value().lastActivityUtc =
+            QDateTime::currentDateTimeUtc();
+    }
+
+    QJsonObject pongObject;
+    pongObject.insert(QStringLiteral("type"), QStringLiteral("pong"));
+    sendJson(clientSocket, pongObject);
+}
+
+void ChatServer::checkConnectionTimeouts()
+{
+    const QDateTime now =
+        QDateTime::currentDateTimeUtc();
+    QList<QTcpSocket *> timedOutSockets;
+
+    for (auto clientIt = m_clients.cbegin();
+         clientIt != m_clients.cend();
+         ++clientIt)
+    {
+        if (clientIt.value().lastActivityUtc.secsTo(now)
+            > connectionTimeoutSeconds)
+        {
+            timedOutSockets.append(clientIt.key());
+        }
+    }
+
+    for (QTcpSocket *socket : timedOutSockets)
+    {
+        sendError(
+            socket,
+            QStringLiteral("连接超时"));
+        socket->disconnectFromHost();
+    }
 }
 
 void ChatServer::handleDisconnected(

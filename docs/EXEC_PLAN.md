@@ -78,11 +78,19 @@
 - `history` now works for direct conversations as well as the hall.
 - End-to-end TCP smoke test passed for two registered users, private message delivery, and direct history lookup.
 
+### Stage 11 - Heartbeat and Connection Timeout Foundation
+
+- Added `ping` handling and `pong` responses.
+- Added per-client last-activity timestamps and a periodic timeout check.
+- Server disconnects connections idle for more than the configured timeout.
+- Build passed and server tests passed.
+- End-to-end TCP heartbeat smoke test passed.
+
 ## Next
 
 1. Add unread/read-state synchronization.
 2. Split connection handling into `ClientSession`.
-3. Add heartbeat, connection timeout, and duplicate `request_id` handling.
+3. Add duplicate `request_id` handling.
 4. Add reconnect/session sync.
 
 ## Honest Gaps

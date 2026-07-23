@@ -6,6 +6,7 @@
 
 #include <QHash>
 #include <QByteArray>
+#include <QDateTime>
 #include <QJsonObject>
 #include <memory>
 #include <QString>
@@ -13,6 +14,7 @@
 #include <QTcpServer>
 
 class QTcpSocket;
+class QTimer;
 
 class ChatServer
 {
@@ -27,6 +29,7 @@ private:
         QString nickname;
         bool loggedIn = false;
         QByteArray inputBuffer;
+        QDateTime lastActivityUtc;
     };
 
 private:
@@ -70,6 +73,11 @@ private:
         const QString &conversationId,
         int limit);
 
+    void handlePing(
+        QTcpSocket *clientSocket);
+
+    void checkConnectionTimeouts();
+
     void handleDisconnected(
         QTcpSocket *clientSocket);
 
@@ -107,6 +115,7 @@ private:
 
     quint16 m_port;
     QTcpServer m_server;
+    QTimer *m_timeoutTimer;
     SQLiteRepository m_repository;
     std::unique_ptr<AuthService> m_authService;
 };
