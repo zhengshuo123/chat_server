@@ -91,6 +91,10 @@ private:
 
     QStringList onlineNicknames() const;
 
+    QString directConversationId(
+        const QString &firstUsername,
+        const QString &secondUsername) const;
+
     QTcpSocket *findClientByNickname(
         const QString &nickname) const;
 

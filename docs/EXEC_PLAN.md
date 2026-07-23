@@ -71,12 +71,19 @@
 - Server returns `history_result` with persisted message metadata and content.
 - End-to-end TCP smoke test passed for register, send hall message, request history, and verify the persisted message is returned.
 
+### Stage 10 - Direct Message Persistence and History
+
+- Added stable direct conversation IDs with canonical username ordering.
+- Private messages now carry `conversation_id` and are persisted through `SQLiteRepository`.
+- `history` now works for direct conversations as well as the hall.
+- End-to-end TCP smoke test passed for two registered users, private message delivery, and direct history lookup.
+
 ## Next
 
-1. Persist private messages and direct conversation metadata through `SQLiteRepository`.
-2. Add private conversation history loading.
-3. Split connection handling into `ClientSession`.
-4. Add heartbeat, connection timeout, and duplicate `request_id` handling.
+1. Add unread/read-state synchronization.
+2. Split connection handling into `ClientSession`.
+3. Add heartbeat, connection timeout, and duplicate `request_id` handling.
+4. Add reconnect/session sync.
 
 ## Honest Gaps
 

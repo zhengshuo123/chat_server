@@ -711,6 +711,14 @@ void ChatServer::handlePrivateMessage(
         QStringLiteral("timestamp"),
         currentTimestamp());
 
+    const QString conversationId =
+        directConversationId(
+            senderInfo.nickname,
+            trimmedTarget);
+    privateChatObject.insert(
+        QStringLiteral("conversation_id"),
+        conversationId);
+
     sendJson(
         targetSocket,
         privateChatObject);
@@ -725,6 +733,28 @@ void ChatServer::handlePrivateMessage(
             << trimmedTarget
             << ":"
             << trimmedMessage;
+
+    if (!m_repository.createConversation(
+            conversationId,
+            QStringLiteral("direct"),
+            QStringLiteral("%1 / %2")
+                .arg(senderInfo.nickname, trimmedTarget)))
+    {
+        qWarning() << "Failed to ensure direct conversation:"
+                   << m_repository.lastError();
+    }
+
+    if (!m_repository.appendMessage(
+            conversationId,
+            senderInfo.nickname,
+            QStringLiteral("text"),
+            trimmedMessage,
+            QStringLiteral("sent"),
+            QDateTime::currentDateTimeUtc()))
+    {
+        qWarning() << "Failed to persist private message:"
+                   << m_repository.lastError();
+    }
 }
 
 void ChatServer::handleHistoryRequest(
@@ -1038,6 +1068,19 @@ QStringList ChatServer::onlineNicknames() const
         Qt::CaseInsensitive);
 
     return nicknames;
+}
+
+QString ChatServer::directConversationId(
+    const QString &firstUsername,
+    const QString &secondUsername) const
+{
+    QStringList names{
+        firstUsername.trimmed().toCaseFolded(),
+        secondUsername.trimmed().toCaseFolded()};
+    names.sort();
+
+    return QStringLiteral("dm:%1:%2")
+        .arg(names.value(0), names.value(1));
 }
 
 QTcpSocket *ChatServer::findClientByNickname(
