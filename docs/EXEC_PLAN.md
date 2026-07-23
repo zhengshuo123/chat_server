@@ -131,15 +131,22 @@
 - Server build and all server Qt Tests were rerun successfully.
 - Client build and Qt Tests passed, including the new `clientrepository` SQLite cache tests.
 
+### Stage 19 - Known Conversation Resync Checkpoint
+
+- Server code was not changed in this client-focused reconnect sync stage.
+- Server build and all server Qt Tests were rerun successfully.
+- Client now requests history for all known local conversations after login/reconnect and for newly discovered online direct conversations.
+
 ## Next
 
-1. Split connection handling into `ClientSession`.
-2. Add reconnect/session sync.
+1. Add a conversation-list/sync API for reconnect and fresh-install discovery.
+2. Split connection handling into `ClientSession`.
 3. Replace inline file transfer with chunked attachment storage.
 
 ## Honest Gaps
 
 - The new protocol module is tested but not yet wired into live networking.
 - Live register/login is wired for password-based accounts; nickname-only login remains temporarily for migration and should be removed once the client no longer needs compatibility.
+- Reconnect sync still needs a server conversation-list API for offline direct conversations.
 - Server responsibilities are still concentrated in `ChatServer`.
 - Clazy is not currently available in `PATH`; an earlier Qt Creator bundled `clazy-standalone.exe` attempt failed before project analysis on MinGW system headers. This remains an environment/toolchain setup item; MinGW compilation itself succeeds.
