@@ -48,13 +48,16 @@ Implemented:
 - Hall and direct-message history queries
 - Online user broadcasts
 - Heartbeat `ping`/`pong` and idle timeout foundation
-- Small inline file-message transfer foundation
+- Read-state sync and durable unread counts
+- Conversation-list sync for reconnect/session recovery
+- Durable server attachment storage
+- Chunked file upload/download with progress protocol messages
 - Per-connection duplicate `request_id` guard for mutating requests
+- Per-connection state split into `ClientSession`
 
 Still in progress:
 
-- Read-state sync and durable unread counts
 - Cross-session request deduplication and reconnect resync
-- Chunked file/image transfer, attachment storage, progress, and download flow
-- `ClientSession` extraction from `ChatServer`
+- Moving more JSON dispatch and socket handling out of `ChatServer`
+- Optional image thumbnail metadata before download
 - Final Linux compatibility pass
