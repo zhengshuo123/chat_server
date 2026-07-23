@@ -147,6 +147,12 @@
 - Server build and all server Qt Tests passed.
 - End-to-end TCP smoke test passed for registering two users, creating a direct conversation, and retrieving it through `conversation_list`.
 
+### Stage 21 - Client Background Local Store Checkpoint
+
+- Server code was not changed in this client-focused local store threading stage.
+- Server build and all server Qt Tests were rerun successfully.
+- Client now queues runtime local SQLite writes to a dedicated worker thread.
+
 ## Next
 
 1. Split connection handling into `ClientSession`.
