@@ -239,6 +239,13 @@
 - Server build, all server Qt Tests, and server Clazy were rerun successfully.
 - Client no longer sends history/read requests for preview-only conversations that do not exist on the server.
 
+### Stage 33 - Message Echo Request IDs
+
+- Group and direct text-message echoes now include the original client `request_id` in their payload.
+- The client uses that request ID to confirm the pending outgoing bubble as sent instead of rendering a duplicate echo.
+- Server build, all server Qt Tests, and server Clazy passed.
+- Client build, all client Qt Tests, and client Clazy passed as compatibility checks.
+
 ## Next
 
 1. Move JSON dispatch and socket signal wiring deeper into `ClientSession`.

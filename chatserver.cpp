@@ -289,7 +289,8 @@ void ChatServer::handleJsonMessage(
 
         handleChatMessage(
             clientSocket,
-            message);
+            message,
+            requestId);
 
         return;
     }
@@ -310,7 +311,8 @@ void ChatServer::handleJsonMessage(
         handlePrivateMessage(
             clientSocket,
             targetNickname,
-            message);
+            message,
+            requestId);
 
         return;
     }
@@ -676,7 +678,8 @@ void ChatServer::completeLogin(
 
 void ChatServer::handleChatMessage(
     QTcpSocket *clientSocket,
-    const QString &message)
+    const QString &message,
+    const QString &requestId)
 {
     auto clientIt =
         m_clients.find(clientSocket);
@@ -740,6 +743,13 @@ void ChatServer::handleChatMessage(
         QStringLiteral("timestamp"),
         currentTimestamp());
 
+    if (!requestId.isEmpty())
+    {
+        chatObject.insert(
+            QStringLiteral("request_id"),
+            requestId);
+    }
+
     broadcastJson(chatObject);
 
     if (!m_repository.appendMessage(
@@ -758,7 +768,8 @@ void ChatServer::handleChatMessage(
 void ChatServer::handlePrivateMessage(
     QTcpSocket *clientSocket,
     const QString &targetNickname,
-    const QString &message)
+    const QString &message,
+    const QString &requestId)
 {
     auto senderIt =
         m_clients.find(clientSocket);
@@ -866,6 +877,13 @@ void ChatServer::handlePrivateMessage(
     privateChatObject.insert(
         QStringLiteral("conversation_id"),
         conversationId);
+
+    if (!requestId.isEmpty())
+    {
+        privateChatObject.insert(
+            QStringLiteral("request_id"),
+            requestId);
+    }
 
     sendJson(
         targetSocket,

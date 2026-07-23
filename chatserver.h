@@ -67,12 +67,14 @@ private:
 
     void handleChatMessage(
         QTcpSocket *clientSocket,
-        const QString &message);
+        const QString &message,
+        const QString &requestId);
 
     void handlePrivateMessage(
         QTcpSocket *clientSocket,
         const QString &targetNickname,
-        const QString &message);
+        const QString &message,
+        const QString &requestId);
 
     void handleFileMessage(
         QTcpSocket *clientSocket,
