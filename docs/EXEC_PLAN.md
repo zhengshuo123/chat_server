@@ -40,16 +40,26 @@
 - Build passed and server `protocolcodec` Qt Test passed.
 - Real TCP smoke test passed with envelope login and server responses: `login_result`, `system`, `user_list`.
 
+### Stage 6 - SQLite Repository Foundation
+
+- Added `SQLiteRepository` with isolated SQL access.
+- Opens SQLite with foreign keys, WAL, and busy timeout enabled.
+- Added schema for users, conversations, conversation members, messages, and attachments.
+- Uses transactions for schema migration and parameterized SQL for repository writes/reads.
+- Added Qt Test coverage proving users, conversations, and messages persist after closing and reopening the database.
+- Build passed and server tests passed: `protocolcodec`, `sqliterepository`.
+
 ## Next
 
-1. Split connection handling into `ClientSession`.
-2. Add SQLite repositories with WAL, foreign keys, transactions, users, conversations, messages, read state, and attachments.
-3. Add `AuthService` with non-plain-text password hashing and formal register/login.
+1. Add `AuthService` with non-plain-text password hashing and formal register/login.
+2. Wire `SQLiteRepository` into `ChatServer` startup and message persistence.
+3. Split connection handling into `ClientSession`.
 4. Add heartbeat, connection timeout, and duplicate `request_id` handling.
 
 ## Honest Gaps
 
 - The new protocol module is tested but not yet wired into live networking.
-- Persistence and password hashing are not implemented yet.
+- Persistence foundation exists, but it is not yet wired into live `ChatServer` message/auth flows.
+- Password hashing is not implemented yet.
 - Server responsibilities are still concentrated in `ChatServer`.
 - Clazy was attempted with Qt Creator's bundled `clazy-standalone.exe`, but the local Clang tooling failed before project analysis on MinGW system headers. This remains an environment/toolchain setup item; MinGW compilation itself succeeds.

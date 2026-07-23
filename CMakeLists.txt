@@ -14,12 +14,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS
     Core
     Network
+    Sql
     Test
 )
 
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS
     Core
     Network
+    Sql
     Test
 )
 
@@ -40,12 +42,15 @@ add_executable(chat_server
     main.cpp
     chatserver.h
     chatserver.cpp
+    persistence/sqliterepository.h
+    persistence/sqliterepository.cpp
 )
 
 target_link_libraries(chat_server PRIVATE
     chat_server_protocol
     Qt${QT_VERSION_MAJOR}::Core
     Qt${QT_VERSION_MAJOR}::Network
+    Qt${QT_VERSION_MAJOR}::Sql
 )
 
 add_executable(tst_protocolcodec
@@ -61,6 +66,23 @@ target_link_libraries(tst_protocolcodec PRIVATE
 add_test(
     NAME protocolcodec
     COMMAND tst_protocolcodec
+)
+
+add_executable(tst_sqliterepository
+    tests/tst_sqliterepository.cpp
+    persistence/sqliterepository.h
+    persistence/sqliterepository.cpp
+)
+
+target_link_libraries(tst_sqliterepository PRIVATE
+    Qt${QT_VERSION_MAJOR}::Core
+    Qt${QT_VERSION_MAJOR}::Sql
+    Qt${QT_VERSION_MAJOR}::Test
+)
+
+add_test(
+    NAME sqliterepository
+    COMMAND tst_sqliterepository
 )
 
 include(GNUInstallDirs)
