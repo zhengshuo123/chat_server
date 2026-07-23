@@ -196,10 +196,19 @@
 - Real TCP smoke test passed for register, chunked hall upload, `file_chat` attachment ID, and history lookup.
 - Client build, all client Qt Tests, client Clazy, and Windows packaging recheck passed as the upload producer checkpoint.
 
+### Stage 27 - Chunked File Download
+
+- `file_download` now responds with `file_download_ready` followed by sequential `file_download_chunk` frames instead of one inline payload.
+- Download responses validate the persisted attachment file size before streaming.
+- Existing attachment lookup and permission/login checks remain in the server download path.
+- Server build, all server Qt Tests, and server Clazy passed.
+- Real TCP smoke test passed for chunked upload, chunked download, and byte-for-byte attachment round trip.
+- Client build, all client Qt Tests, client Clazy, and Windows packaging recheck passed as the download consumer checkpoint.
+
 ## Next
 
 1. Split connection handling into `ClientSession`.
-2. Convert file download to chunked transfer with real download progress.
+2. Add image thumbnail metadata/generation for image attachments.
 3. Remove nickname-only login compatibility once migration is no longer needed.
 
 ## Honest Gaps

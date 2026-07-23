@@ -1413,25 +1413,47 @@ void ChatServer::handleFileDownload(
         return;
     }
 
-    const QByteArray fileData =
-        file.readAll();
-
-    if (fileData.size() != attachment.sizeBytes)
+    if (file.size() != attachment.sizeBytes)
     {
         sendError(clientSocket, QStringLiteral("附件文件大小不一致"));
         return;
     }
 
-    QJsonObject resultObject;
-    resultObject.insert(QStringLiteral("type"), QStringLiteral("file_download_result"));
-    resultObject.insert(QStringLiteral("attachment_id"), QString::number(attachment.id));
-    resultObject.insert(QStringLiteral("file_name"), attachment.fileName);
-    resultObject.insert(QStringLiteral("size"), attachment.sizeBytes);
-    resultObject.insert(
-        QStringLiteral("data_base64"),
-        QString::fromLatin1(fileData.toBase64()));
+    const QString attachmentIdText =
+        QString::number(attachment.id);
 
-    sendJson(clientSocket, resultObject);
+    QJsonObject readyObject;
+    readyObject.insert(QStringLiteral("type"), QStringLiteral("file_download_ready"));
+    readyObject.insert(QStringLiteral("attachment_id"), attachmentIdText);
+    readyObject.insert(QStringLiteral("file_name"), attachment.fileName);
+    readyObject.insert(QStringLiteral("size"), attachment.sizeBytes);
+    readyObject.insert(QStringLiteral("chunk_size"), maxUploadChunkBytes);
+    sendJson(clientSocket, readyObject);
+
+    qint64 offset = 0;
+
+    while (!file.atEnd())
+    {
+        const QByteArray chunk =
+            file.read(maxUploadChunkBytes);
+
+        if (chunk.isEmpty())
+        {
+            sendError(clientSocket, QStringLiteral("附件读取失败"));
+            return;
+        }
+
+        QJsonObject chunkObject;
+        chunkObject.insert(QStringLiteral("type"), QStringLiteral("file_download_chunk"));
+        chunkObject.insert(QStringLiteral("attachment_id"), attachmentIdText);
+        chunkObject.insert(QStringLiteral("offset"), offset);
+        chunkObject.insert(
+            QStringLiteral("data_base64"),
+            QString::fromLatin1(chunk.toBase64()));
+        sendJson(clientSocket, chunkObject);
+
+        offset += chunk.size();
+    }
 }
 
 void ChatServer::handleHistoryRequest(
