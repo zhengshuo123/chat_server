@@ -357,6 +357,20 @@ void ChatServer::handleJsonMessage(
         return;
     }
 
+    if (type == QStringLiteral("mark_read"))
+    {
+        const QString conversationId =
+            normalizedObject
+                .value(QStringLiteral("conversation_id"))
+                .toString(QStringLiteral("hall"));
+
+        handleMarkReadRequest(
+            clientSocket,
+            conversationId);
+
+        return;
+    }
+
     if (type == QStringLiteral("ping"))
     {
         handlePing(clientSocket);
@@ -969,6 +983,54 @@ void ChatServer::handleHistoryRequest(
     sendJson(clientSocket, resultObject);
 }
 
+void ChatServer::handleMarkReadRequest(
+    QTcpSocket *clientSocket,
+    const QString &conversationId)
+{
+    auto clientIt =
+        m_clients.find(clientSocket);
+
+    if (clientIt == m_clients.end()
+        || !clientIt.value().loggedIn)
+    {
+        sendError(
+            clientSocket,
+            QStringLiteral("请先登录"));
+        return;
+    }
+
+    const QString normalizedConversationId =
+        conversationId.trimmed().isEmpty()
+            ? QStringLiteral("hall")
+            : conversationId.trimmed();
+    const QString nickname =
+        clientIt.value().nickname;
+
+    if (!m_repository.markConversationRead(
+            normalizedConversationId,
+            nickname))
+    {
+        sendError(
+            clientSocket,
+            QStringLiteral("保存已读状态失败"));
+        qWarning() << "Failed to mark conversation read:"
+                   << m_repository.lastError();
+        return;
+    }
+
+    QJsonObject resultObject;
+    resultObject.insert(QStringLiteral("type"), QStringLiteral("read_state"));
+    resultObject.insert(QStringLiteral("conversation_id"), normalizedConversationId);
+    resultObject.insert(
+        QStringLiteral("unread_count"),
+        m_repository.unreadCount(
+            normalizedConversationId,
+            nickname));
+    resultObject.insert(QStringLiteral("timestamp"), currentTimestamp());
+
+    sendJson(clientSocket, resultObject);
+}
+
 void ChatServer::handlePing(
     QTcpSocket *clientSocket)
 {
@@ -1026,7 +1088,8 @@ bool ChatServer::shouldIgnoreDuplicateRequest(
         type == QStringLiteral("register")
         || type == QStringLiteral("message")
         || type == QStringLiteral("private_message")
-        || type == QStringLiteral("file_message");
+        || type == QStringLiteral("file_message")
+        || type == QStringLiteral("mark_read");
 
     if (!mutatingRequest)
     {

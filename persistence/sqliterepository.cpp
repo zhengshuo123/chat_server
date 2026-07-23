@@ -333,6 +333,79 @@ QList<SQLiteRepository::StoredMessage> SQLiteRepository::messagesForConversation
     return messages;
 }
 
+bool SQLiteRepository::markConversationRead(
+    const QString &conversationId,
+    const QString &username)
+{
+    const qint64 readerId =
+        userId(username);
+
+    if (readerId == 0)
+    {
+        m_lastError = QStringLiteral("用户不存在");
+        return false;
+    }
+
+    QSqlQuery query(m_database);
+    query.prepare(
+        QStringLiteral(
+            "INSERT INTO conversation_members(conversation_id, user_id, last_read_message_id) "
+            "SELECT :conversation_id, :user_id, COALESCE(MAX(id), 0) "
+            "FROM messages WHERE conversation_id = :conversation_id "
+            "ON CONFLICT(conversation_id, user_id) DO UPDATE SET "
+            "last_read_message_id = MAX("
+            "COALESCE(conversation_members.last_read_message_id, 0), "
+            "excluded.last_read_message_id"
+            ")"));
+    query.bindValue(QStringLiteral(":conversation_id"), conversationId);
+    query.bindValue(QStringLiteral(":user_id"), readerId);
+
+    if (!query.exec())
+    {
+        m_lastError = query.lastError().text();
+        return false;
+    }
+
+    return true;
+}
+
+int SQLiteRepository::unreadCount(
+    const QString &conversationId,
+    const QString &username) const
+{
+    const qint64 readerId =
+        userId(username);
+
+    if (readerId == 0)
+    {
+        return 0;
+    }
+
+    QSqlQuery query(m_database);
+    query.prepare(
+        QStringLiteral(
+            "SELECT COUNT(*) "
+            "FROM messages m "
+            "WHERE m.conversation_id = :conversation_id "
+            "AND m.id > COALESCE(("
+            "SELECT cm.last_read_message_id "
+            "FROM conversation_members cm "
+            "WHERE cm.conversation_id = :conversation_id "
+            "AND cm.user_id = :user_id"
+            "), 0) "
+            "AND COALESCE(m.sender_user_id, 0) != :user_id"));
+    query.bindValue(QStringLiteral(":conversation_id"), conversationId);
+    query.bindValue(QStringLiteral(":user_id"), readerId);
+
+    if (!query.exec()
+        || !query.next())
+    {
+        return 0;
+    }
+
+    return query.value(0).toInt();
+}
+
 QString SQLiteRepository::lastError() const
 {
     return m_lastError;

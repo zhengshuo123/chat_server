@@ -67,6 +67,14 @@ public:
         const QString &conversationId,
         int limit) const;
 
+    bool markConversationRead(
+        const QString &conversationId,
+        const QString &username);
+
+    int unreadCount(
+        const QString &conversationId,
+        const QString &username) const;
+
     QString lastError() const;
 
 private:

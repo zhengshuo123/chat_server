@@ -116,12 +116,20 @@
 - Server build and all server Qt Tests were rerun successfully.
 - Client main-window screenshots and right-panel collapse tests passed.
 
+### Stage 17 - Read-State Synchronization
+
+- Added `SQLiteRepository::markConversationRead` and `unreadCount` using `conversation_members.last_read_message_id`.
+- Added Qt Test coverage for unread count calculation, mark-read persistence, and ignoring the reader's own messages.
+- Added live `mark_read` protocol handling and `read_state` responses.
+- Included `mark_read` in request-id deduplication because it mutates durable read state.
+- Server build and all server Qt Tests passed.
+- End-to-end TCP smoke test passed for register, hall message, history, `mark_read`, and `read_state unread_count = 0`.
+
 ## Next
 
-1. Add unread/read-state synchronization.
-2. Split connection handling into `ClientSession`.
-3. Add reconnect/session sync.
-4. Replace inline file transfer with chunked attachment storage.
+1. Split connection handling into `ClientSession`.
+2. Add reconnect/session sync.
+3. Replace inline file transfer with chunked attachment storage.
 
 ## Honest Gaps
 
