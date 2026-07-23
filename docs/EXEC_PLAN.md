@@ -104,13 +104,18 @@
 - File message metadata is persisted as `kind = 'file'`.
 - End-to-end TCP smoke test passed for sending a hall file message and reading it from history.
 
+### Stage 15 - Request ID Deduplication
+
+- Added per-connection `request_id` tracking for mutating requests.
+- Duplicate `register`, `message`, `private_message`, and `file_message` requests are ignored after the first successful dispatch path starts.
+- End-to-end TCP smoke test passed: two messages with the same `request_id` produce one persisted hall message.
+
 ## Next
 
 1. Add unread/read-state synchronization.
 2. Split connection handling into `ClientSession`.
-3. Add duplicate `request_id` handling.
-4. Add reconnect/session sync.
-5. Replace inline file transfer with chunked attachment storage.
+3. Add reconnect/session sync.
+4. Replace inline file transfer with chunked attachment storage.
 
 ## Honest Gaps
 

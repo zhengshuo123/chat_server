@@ -8,6 +8,7 @@
 #include <QByteArray>
 #include <QDateTime>
 #include <QJsonObject>
+#include <QSet>
 #include <memory>
 #include <QString>
 #include <QStringList>
@@ -30,6 +31,7 @@ private:
         bool loggedIn = false;
         QByteArray inputBuffer;
         QDateTime lastActivityUtc;
+        QSet<QString> processedRequestIds;
     };
 
 private:
@@ -84,6 +86,11 @@ private:
         QTcpSocket *clientSocket);
 
     void checkConnectionTimeouts();
+
+    bool shouldIgnoreDuplicateRequest(
+        QTcpSocket *clientSocket,
+        const QString &type,
+        const QString &requestId);
 
     void handleDisconnected(
         QTcpSocket *clientSocket);

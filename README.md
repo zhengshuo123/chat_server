@@ -49,11 +49,12 @@ Implemented:
 - Online user broadcasts
 - Heartbeat `ping`/`pong` and idle timeout foundation
 - Small inline file-message transfer foundation
+- Per-connection duplicate `request_id` guard for mutating requests
 
 Still in progress:
 
 - Read-state sync and durable unread counts
-- Duplicate request ID handling
+- Cross-session request deduplication and reconnect resync
 - Chunked file/image transfer, attachment storage, progress, and download flow
 - `ClientSession` extraction from `ChatServer`
 - Final Linux compatibility pass

@@ -136,7 +136,8 @@ void ChatServer::handleNewConnections()
                 QString{},
                 false,
                 QByteArray{},
-                QDateTime::currentDateTimeUtc()});
+                QDateTime::currentDateTimeUtc(),
+                QSet<QString>{}});
 
         qInfo() << "New TCP connection:"
                 << clientSocket->peerAddress().toString()
@@ -230,6 +231,18 @@ void ChatServer::handleJsonMessage(
         normalizedObject
             .value(QStringLiteral("type"))
             .toString();
+    const QString requestId =
+        normalizedObject
+            .value(QStringLiteral("request_id"))
+            .toString();
+
+    if (shouldIgnoreDuplicateRequest(
+            clientSocket,
+            type,
+            requestId))
+    {
+        return;
+    }
 
     if (type == QStringLiteral("login"))
     {
@@ -997,6 +1010,56 @@ void ChatServer::checkConnectionTimeouts()
             QStringLiteral("连接超时"));
         socket->disconnectFromHost();
     }
+}
+
+bool ChatServer::shouldIgnoreDuplicateRequest(
+    QTcpSocket *clientSocket,
+    const QString &type,
+    const QString &requestId)
+{
+    if (requestId.isEmpty())
+    {
+        return false;
+    }
+
+    const bool mutatingRequest =
+        type == QStringLiteral("register")
+        || type == QStringLiteral("message")
+        || type == QStringLiteral("private_message")
+        || type == QStringLiteral("file_message");
+
+    if (!mutatingRequest)
+    {
+        return false;
+    }
+
+    auto clientIt =
+        m_clients.find(clientSocket);
+
+    if (clientIt == m_clients.end())
+    {
+        return false;
+    }
+
+    ClientInfo &clientInfo =
+        clientIt.value();
+
+    if (clientInfo.processedRequestIds.contains(requestId))
+    {
+        qInfo() << "Ignoring duplicate request_id:"
+                << requestId
+                << "type:"
+                << type;
+        return true;
+    }
+
+    if (clientInfo.processedRequestIds.size() > 1024)
+    {
+        clientInfo.processedRequestIds.clear();
+    }
+
+    clientInfo.processedRequestIds.insert(requestId);
+    return false;
 }
 
 void ChatServer::handleDisconnected(
