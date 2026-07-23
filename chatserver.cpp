@@ -23,6 +23,7 @@ constexpr qint64 maxProtocolLineBytes =
 
 constexpr int maxNicknameLength = 20;
 constexpr int maxMessageLength = 500;
+constexpr qint64 maxInlineFileBytes = 512 * 1024;
 constexpr int connectionTimeoutSeconds = 45;
 
 QString currentTimestamp()
@@ -299,6 +300,27 @@ void ChatServer::handleJsonMessage(
             clientSocket,
             targetNickname,
             message);
+
+        return;
+    }
+
+    if (type == QStringLiteral("file_message"))
+    {
+        handleFileMessage(
+            clientSocket,
+            normalizedObject
+                .value(QStringLiteral("target"))
+                .toString(),
+            normalizedObject
+                .value(QStringLiteral("file_name"))
+                .toString(),
+            static_cast<qint64>(
+                normalizedObject
+                    .value(QStringLiteral("size"))
+                    .toDouble()),
+            normalizedObject
+                .value(QStringLiteral("data_base64"))
+                .toString());
 
         return;
     }
@@ -780,6 +802,105 @@ void ChatServer::handlePrivateMessage(
             QDateTime::currentDateTimeUtc()))
     {
         qWarning() << "Failed to persist private message:"
+                   << m_repository.lastError();
+    }
+}
+
+void ChatServer::handleFileMessage(
+    QTcpSocket *clientSocket,
+    const QString &targetNickname,
+    const QString &fileName,
+    qint64 size,
+    const QString &base64Data)
+{
+    auto senderIt =
+        m_clients.find(clientSocket);
+
+    if (senderIt == m_clients.end()
+        || !senderIt.value().loggedIn)
+    {
+        sendError(clientSocket, QStringLiteral("请先登录"));
+        return;
+    }
+
+    const ClientInfo &senderInfo =
+        senderIt.value();
+    const QString trimmedFileName =
+        fileName.trimmed();
+    const QString trimmedTarget =
+        targetNickname.trimmed();
+
+    if (trimmedFileName.isEmpty()
+        || size <= 0
+        || size > maxInlineFileBytes)
+    {
+        sendError(clientSocket, QStringLiteral("文件无效或超过 512 KB"));
+        return;
+    }
+
+    const QByteArray fileData =
+        QByteArray::fromBase64(base64Data.toLatin1());
+
+    if (fileData.size() != size)
+    {
+        sendError(clientSocket, QStringLiteral("文件数据无效"));
+        return;
+    }
+
+    QJsonObject fileChatObject;
+    fileChatObject.insert(QStringLiteral("type"), QStringLiteral("file_chat"));
+    fileChatObject.insert(QStringLiteral("from"), senderInfo.nickname);
+    fileChatObject.insert(QStringLiteral("to"), trimmedTarget);
+    fileChatObject.insert(QStringLiteral("file_name"), trimmedFileName);
+    fileChatObject.insert(QStringLiteral("size"), size);
+    fileChatObject.insert(QStringLiteral("data_base64"), base64Data);
+    fileChatObject.insert(QStringLiteral("timestamp"), currentTimestamp());
+
+    QString conversationId = QStringLiteral("hall");
+
+    if (trimmedTarget.isEmpty())
+    {
+        fileChatObject.insert(QStringLiteral("conversation_id"), conversationId);
+        broadcastJson(fileChatObject);
+    }
+    else
+    {
+        QTcpSocket *targetSocket =
+            findClientByNickname(trimmedTarget);
+
+        if (targetSocket == nullptr)
+        {
+            sendError(clientSocket, QStringLiteral("私聊对象当前不在线"));
+            return;
+        }
+
+        conversationId =
+            directConversationId(senderInfo.nickname, trimmedTarget);
+        fileChatObject.insert(QStringLiteral("conversation_id"), conversationId);
+
+        sendJson(targetSocket, fileChatObject);
+        sendJson(clientSocket, fileChatObject);
+
+        if (!m_repository.createConversation(
+                conversationId,
+                QStringLiteral("direct"),
+                QStringLiteral("%1 / %2")
+                    .arg(senderInfo.nickname, trimmedTarget)))
+        {
+            qWarning() << "Failed to ensure direct file conversation:"
+                       << m_repository.lastError();
+        }
+    }
+
+    if (!m_repository.appendMessage(
+            conversationId,
+            senderInfo.nickname,
+            QStringLiteral("file"),
+            trimmedFileName,
+            QStringLiteral("sent"),
+            QDateTime::currentDateTimeUtc()))
+    {
+        qWarning() << "Failed to persist file message:"
                    << m_repository.lastError();
     }
 }

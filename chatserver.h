@@ -68,6 +68,13 @@ private:
         const QString &targetNickname,
         const QString &message);
 
+    void handleFileMessage(
+        QTcpSocket *clientSocket,
+        const QString &targetNickname,
+        const QString &fileName,
+        qint64 size,
+        const QString &base64Data);
+
     void handleHistoryRequest(
         QTcpSocket *clientSocket,
         const QString &conversationId,

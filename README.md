@@ -48,11 +48,12 @@ Implemented:
 - Hall and direct-message history queries
 - Online user broadcasts
 - Heartbeat `ping`/`pong` and idle timeout foundation
+- Small inline file-message transfer foundation
 
 Still in progress:
 
 - Read-state sync and durable unread counts
 - Duplicate request ID handling
-- File/image transfer and attachment storage flow
+- Chunked file/image transfer, attachment storage, progress, and download flow
 - `ClientSession` extraction from `ChatServer`
 - Final Linux compatibility pass

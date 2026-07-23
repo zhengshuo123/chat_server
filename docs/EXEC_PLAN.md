@@ -97,12 +97,20 @@
 - Server build and all server Qt Tests were rerun successfully.
 - Client packaging script was verified in the client repository.
 
+### Stage 14 - Small File Transfer Foundation
+
+- Added `file_message` handling with 512 KB inline base64 validation.
+- Server forwards file messages to the hall or a direct conversation.
+- File message metadata is persisted as `kind = 'file'`.
+- End-to-end TCP smoke test passed for sending a hall file message and reading it from history.
+
 ## Next
 
 1. Add unread/read-state synchronization.
 2. Split connection handling into `ClientSession`.
 3. Add duplicate `request_id` handling.
 4. Add reconnect/session sync.
+5. Replace inline file transfer with chunked attachment storage.
 
 ## Honest Gaps
 
