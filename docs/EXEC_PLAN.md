@@ -168,6 +168,12 @@
 - Server build and all server Qt Tests were rerun successfully.
 - Client now renders file cards, caches current inline file payloads locally, and supports saving cached file messages.
 
+### Stage 24 - Client Windows Packaging Checkpoint
+
+- Server code was not changed in this client packaging recheck.
+- Client `windeployqt` package was regenerated after Qt Sql support was added.
+- Client package includes the SQLite driver at `sqldrivers/qsqlite.dll`.
+
 ## Next
 
 1. Split connection handling into `ClientSession`.
