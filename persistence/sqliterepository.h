@@ -20,6 +20,14 @@ public:
         QString status;
     };
 
+    struct StoredConversation
+    {
+        QString id;
+        QString type;
+        QString title;
+        int unreadCount = 0;
+    };
+
     struct UserCredentials
     {
         qint64 id = 0;
@@ -54,6 +62,13 @@ public:
         const QString &conversationId,
         const QString &type,
         const QString &title);
+
+    bool ensureConversationMember(
+        const QString &conversationId,
+        const QString &username);
+
+    QList<StoredConversation> conversationsForUser(
+        const QString &username) const;
 
     bool appendMessage(
         const QString &conversationId,

@@ -82,6 +82,9 @@ private:
         const QString &conversationId,
         int limit);
 
+    void handleConversationListRequest(
+        QTcpSocket *clientSocket);
+
     void handleMarkReadRequest(
         QTcpSocket *clientSocket,
         const QString &conversationId);

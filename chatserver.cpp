@@ -357,6 +357,12 @@ void ChatServer::handleJsonMessage(
         return;
     }
 
+    if (type == QStringLiteral("conversation_list"))
+    {
+        handleConversationListRequest(clientSocket);
+        return;
+    }
+
     if (type == QStringLiteral("mark_read"))
     {
         const QString conversationId =
@@ -574,6 +580,14 @@ void ChatServer::completeLogin(
         username;
 
     clientInfo.loggedIn = true;
+
+    if (!m_repository.ensureConversationMember(
+            QStringLiteral("hall"),
+            username))
+    {
+        qWarning() << "Failed to ensure hall membership:"
+                   << m_repository.lastError();
+    }
 
     qInfo() << "Client logged in:"
             << username
@@ -820,6 +834,17 @@ void ChatServer::handlePrivateMessage(
                    << m_repository.lastError();
     }
 
+    if (!m_repository.ensureConversationMember(
+            conversationId,
+            senderInfo.nickname)
+        || !m_repository.ensureConversationMember(
+            conversationId,
+            trimmedTarget))
+    {
+        qWarning() << "Failed to ensure direct members:"
+                   << m_repository.lastError();
+    }
+
     if (!m_repository.appendMessage(
             conversationId,
             senderInfo.nickname,
@@ -917,6 +942,17 @@ void ChatServer::handleFileMessage(
             qWarning() << "Failed to ensure direct file conversation:"
                        << m_repository.lastError();
         }
+
+        if (!m_repository.ensureConversationMember(
+                conversationId,
+                senderInfo.nickname)
+            || !m_repository.ensureConversationMember(
+                conversationId,
+                trimmedTarget))
+        {
+            qWarning() << "Failed to ensure direct file members:"
+                       << m_repository.lastError();
+        }
     }
 
     if (!m_repository.appendMessage(
@@ -979,6 +1015,44 @@ void ChatServer::handleHistoryRequest(
     resultObject.insert(QStringLiteral("type"), QStringLiteral("history_result"));
     resultObject.insert(QStringLiteral("conversation_id"), normalizedConversationId);
     resultObject.insert(QStringLiteral("messages"), messageArray);
+
+    sendJson(clientSocket, resultObject);
+}
+
+void ChatServer::handleConversationListRequest(
+    QTcpSocket *clientSocket)
+{
+    auto clientIt =
+        m_clients.find(clientSocket);
+
+    if (clientIt == m_clients.end()
+        || !clientIt.value().loggedIn)
+    {
+        sendError(
+            clientSocket,
+            QStringLiteral("请先登录"));
+        return;
+    }
+
+    const QList<SQLiteRepository::StoredConversation> conversations =
+        m_repository.conversationsForUser(
+            clientIt.value().nickname);
+
+    QJsonArray conversationArray;
+
+    for (const SQLiteRepository::StoredConversation &conversation : conversations)
+    {
+        QJsonObject object;
+        object.insert(QStringLiteral("id"), conversation.id);
+        object.insert(QStringLiteral("type"), conversation.type);
+        object.insert(QStringLiteral("title"), conversation.title);
+        object.insert(QStringLiteral("unread_count"), conversation.unreadCount);
+        conversationArray.append(object);
+    }
+
+    QJsonObject resultObject;
+    resultObject.insert(QStringLiteral("type"), QStringLiteral("conversation_list"));
+    resultObject.insert(QStringLiteral("conversations"), conversationArray);
 
     sendJson(clientSocket, resultObject);
 }

@@ -12,6 +12,7 @@ class SQLiteRepositoryTest : public QObject
 private slots:
     void persistsUsersConversationsAndMessages();
     void tracksReadState();
+    void listsConversationsForMember();
 };
 
 void SQLiteRepositoryTest::persistsUsersConversationsAndMessages()
@@ -168,6 +169,76 @@ void SQLiteRepositoryTest::tracksReadState()
             QStringLiteral("hall"),
             QStringLiteral("alice")),
         1);
+
+    QFile::remove(databasePath);
+    QFile::remove(databasePath + QStringLiteral("-wal"));
+    QFile::remove(databasePath + QStringLiteral("-shm"));
+}
+
+void SQLiteRepositoryTest::listsConversationsForMember()
+{
+    const QString tempRoot =
+        QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+    const QString databasePath =
+        QDir(tempRoot).filePath(
+            QStringLiteral("chat_repository_conversation_list_%1.sqlite")
+                .arg(QDateTime::currentMSecsSinceEpoch()));
+
+    SQLiteRepository repository;
+    QVERIFY2(
+        repository.open(databasePath, QStringLiteral("repo_conversation_list")),
+        qPrintable(repository.lastError()));
+    QVERIFY2(repository.initializeSchema(), qPrintable(repository.lastError()));
+    QVERIFY2(
+        repository.createUser(
+            QStringLiteral("alice"),
+            QStringLiteral("hash"),
+            QStringLiteral("salt")),
+        qPrintable(repository.lastError()));
+    QVERIFY2(
+        repository.createUser(
+            QStringLiteral("bob"),
+            QStringLiteral("hash"),
+            QStringLiteral("salt")),
+        qPrintable(repository.lastError()));
+    QVERIFY2(
+        repository.createConversation(
+            QStringLiteral("hall"),
+            QStringLiteral("group"),
+            QStringLiteral("公共聊天室")),
+        qPrintable(repository.lastError()));
+    QVERIFY2(
+        repository.createConversation(
+            QStringLiteral("dm:alice:bob"),
+            QStringLiteral("direct"),
+            QStringLiteral("alice / bob")),
+        qPrintable(repository.lastError()));
+    QVERIFY2(
+        repository.ensureConversationMember(
+            QStringLiteral("hall"),
+            QStringLiteral("alice")),
+        qPrintable(repository.lastError()));
+    QVERIFY2(
+        repository.ensureConversationMember(
+            QStringLiteral("dm:alice:bob"),
+            QStringLiteral("alice")),
+        qPrintable(repository.lastError()));
+    QVERIFY2(
+        repository.appendMessage(
+            QStringLiteral("dm:alice:bob"),
+            QStringLiteral("bob"),
+            QStringLiteral("text"),
+            QStringLiteral("hello"),
+            QStringLiteral("sent"),
+            QDateTime::currentDateTimeUtc()),
+        qPrintable(repository.lastError()));
+
+    const QList<SQLiteRepository::StoredConversation> conversations =
+        repository.conversationsForUser(QStringLiteral("alice"));
+    QCOMPARE(conversations.size(), 2);
+    QCOMPARE(conversations.at(0).id, QStringLiteral("hall"));
+    QCOMPARE(conversations.at(1).id, QStringLiteral("dm:alice:bob"));
+    QCOMPARE(conversations.at(1).unreadCount, 1);
 
     QFile::remove(databasePath);
     QFile::remove(databasePath + QStringLiteral("-wal"));

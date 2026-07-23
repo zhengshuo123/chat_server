@@ -252,6 +252,81 @@ bool SQLiteRepository::createConversation(
     return true;
 }
 
+bool SQLiteRepository::ensureConversationMember(
+    const QString &conversationId,
+    const QString &username)
+{
+    const qint64 memberId =
+        userId(username);
+
+    if (memberId == 0)
+    {
+        m_lastError = QStringLiteral("用户不存在");
+        return false;
+    }
+
+    QSqlQuery query(m_database);
+    query.prepare(
+        QStringLiteral(
+            "INSERT OR IGNORE INTO conversation_members(conversation_id, user_id, last_read_message_id) "
+            "VALUES(:conversation_id, :user_id, 0)"));
+    query.bindValue(QStringLiteral(":conversation_id"), conversationId);
+    query.bindValue(QStringLiteral(":user_id"), memberId);
+
+    if (!query.exec())
+    {
+        m_lastError = query.lastError().text();
+        return false;
+    }
+
+    return true;
+}
+
+QList<SQLiteRepository::StoredConversation> SQLiteRepository::conversationsForUser(
+    const QString &username) const
+{
+    const qint64 memberId =
+        userId(username);
+
+    if (memberId == 0)
+    {
+        return {};
+    }
+
+    QSqlQuery query(m_database);
+    query.prepare(
+        QStringLiteral(
+            "SELECT c.id, c.type, c.title, "
+            "(SELECT COUNT(*) FROM messages m "
+            "WHERE m.conversation_id = c.id "
+            "AND m.id > COALESCE(cm.last_read_message_id, 0) "
+            "AND COALESCE(m.sender_user_id, 0) != :user_id) AS unread_count "
+            "FROM conversations c "
+            "JOIN conversation_members cm ON cm.conversation_id = c.id "
+            "WHERE cm.user_id = :user_id "
+            "ORDER BY CASE WHEN c.id = 'hall' THEN 0 ELSE 1 END, c.created_at DESC"));
+    query.bindValue(QStringLiteral(":user_id"), memberId);
+
+    QList<StoredConversation> result;
+
+    if (!query.exec())
+    {
+        return result;
+    }
+
+    while (query.next())
+    {
+        result.append(
+            StoredConversation{
+                query.value(0).toString(),
+                query.value(1).toString(),
+                query.value(2).toString(),
+                query.value(3).toInt()});
+    }
+
+    return result;
+}
+
 bool SQLiteRepository::appendMessage(
     const QString &conversationId,
     const QString &senderUsername,
