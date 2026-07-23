@@ -162,6 +162,12 @@
 - Server Clazy completed with no project warnings.
 - Client build, client Qt Tests, and client Clazy completed with no project warnings.
 
+### Stage 23 - Client File Message UI Checkpoint
+
+- Server code was not changed in this client-focused file UI stage.
+- Server build and all server Qt Tests were rerun successfully.
+- Client now renders file cards, caches current inline file payloads locally, and supports saving cached file messages.
+
 ## Next
 
 1. Split connection handling into `ClientSession`.
