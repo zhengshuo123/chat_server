@@ -43,7 +43,6 @@ QString currentTimestamp()
         QDateTime::currentMSecsSinceEpoch());
 }
 }
-
 ChatServer::ChatServer(quint16 port)
     : m_port(port)
     , m_timeoutTimer(new QTimer(&m_server))
@@ -137,12 +136,7 @@ void ChatServer::handleNewConnections()
 
         m_clients.insert(
             clientSocket,
-            ClientInfo{
-                QString{},
-                false,
-                QByteArray{},
-                QDateTime::currentDateTimeUtc(),
-                QSet<QString>{}});
+            ClientSession{clientSocket});
 
         qInfo() << "New TCP connection:"
                 << clientSocket->peerAddress().toString()
@@ -183,19 +177,18 @@ void ChatServer::handleReadyRead(
         return;
     }
 
-    ClientInfo &clientInfo =
+    ClientSession &session =
         clientIt.value();
 
-    clientInfo.inputBuffer.append(
+    session.inputBuffer.append(
         clientSocket->readAll());
-    clientInfo.lastActivityUtc =
-        QDateTime::currentDateTimeUtc();
+    session.markActive();
 
     while (true)
     {
         ProtocolCodec::DecodeResult result =
             ProtocolCodec::tryDecode(
-                clientInfo.inputBuffer);
+                session.inputBuffer);
 
         if (result.status ==
             ProtocolCodec::DecodeStatus::NeedMoreData)
@@ -214,7 +207,7 @@ void ChatServer::handleReadyRead(
         handleJsonMessage(clientSocket, result.message);
     }
 
-    if (clientInfo.inputBuffer.size() >
+    if (session.inputBuffer.size() >
         maxProtocolLineBytes)
     {
         sendError(
@@ -463,7 +456,7 @@ void ChatServer::handleLogin(
         return;
     }
 
-    ClientInfo &clientInfo =
+    ClientSession &session =
         clientIt.value();
 
     const auto sendLoginError =
@@ -489,7 +482,7 @@ void ChatServer::handleLogin(
             resultObject);
     };
 
-    if (clientInfo.loggedIn)
+    if (session.loggedIn)
     {
         sendLoginError(
             QStringLiteral(
@@ -635,13 +628,13 @@ void ChatServer::completeLogin(
         return;
     }
 
-    ClientInfo &clientInfo =
+    ClientSession &session =
         clientIt.value();
 
-    clientInfo.nickname =
+    session.nickname =
         username;
 
-    clientInfo.loggedIn = true;
+    session.loggedIn = true;
 
     if (!m_repository.ensureConversationMember(
             QStringLiteral("hall"),
@@ -690,10 +683,10 @@ void ChatServer::handleChatMessage(
         return;
     }
 
-    const ClientInfo &clientInfo =
+    const ClientSession &session =
         clientIt.value();
 
-    if (!clientInfo.loggedIn)
+    if (!session.loggedIn)
     {
         sendError(
             clientSocket,
@@ -722,7 +715,7 @@ void ChatServer::handleChatMessage(
     }
 
     qInfo() << "Group message from"
-            << clientInfo.nickname
+            << session.nickname
             << ":"
             << trimmedMessage;
 
@@ -734,7 +727,7 @@ void ChatServer::handleChatMessage(
 
     chatObject.insert(
         QStringLiteral("nickname"),
-        clientInfo.nickname);
+        session.nickname);
 
     chatObject.insert(
         QStringLiteral("content"),
@@ -748,7 +741,7 @@ void ChatServer::handleChatMessage(
 
     if (!m_repository.appendMessage(
             QStringLiteral("hall"),
-            clientInfo.nickname,
+            session.nickname,
             QStringLiteral("text"),
             trimmedMessage,
             QStringLiteral("sent"),
@@ -772,7 +765,7 @@ void ChatServer::handlePrivateMessage(
         return;
     }
 
-    const ClientInfo &senderInfo =
+    const ClientSession &senderInfo =
         senderIt.value();
 
     if (!senderInfo.loggedIn)
@@ -937,7 +930,7 @@ void ChatServer::handleFileMessage(
         return;
     }
 
-    const ClientInfo &senderInfo =
+    const ClientSession &senderInfo =
         senderIt.value();
     const QString trimmedFileName =
         fileName.trimmed();
@@ -1125,7 +1118,7 @@ void ChatServer::handleFileUploadStart(
         return;
     }
 
-    const ClientInfo &senderInfo =
+    const ClientSession &senderInfo =
         senderIt.value();
     QString conversationId =
         QStringLiteral("hall");
@@ -1615,8 +1608,7 @@ void ChatServer::handlePing(
 
     if (clientIt != m_clients.end())
     {
-        clientIt.value().lastActivityUtc =
-            QDateTime::currentDateTimeUtc();
+        clientIt.value().markActive();
     }
 
     QJsonObject pongObject;
@@ -1634,8 +1626,9 @@ void ChatServer::checkConnectionTimeouts()
          clientIt != m_clients.cend();
          ++clientIt)
     {
-        if (clientIt.value().lastActivityUtc.secsTo(now)
-            > connectionTimeoutSeconds)
+        if (clientIt.value().timedOut(
+                now,
+                connectionTimeoutSeconds))
         {
             timedOutSockets.append(clientIt.key());
         }
@@ -1665,6 +1658,7 @@ bool ChatServer::shouldIgnoreDuplicateRequest(
         || type == QStringLiteral("message")
         || type == QStringLiteral("private_message")
         || type == QStringLiteral("file_message")
+        || type == QStringLiteral("file_upload_start")
         || type == QStringLiteral("mark_read");
 
     if (!mutatingRequest)
@@ -1680,10 +1674,10 @@ bool ChatServer::shouldIgnoreDuplicateRequest(
         return false;
     }
 
-    ClientInfo &clientInfo =
+    ClientSession &session =
         clientIt.value();
 
-    if (clientInfo.processedRequestIds.contains(requestId))
+    if (session.rememberRequestId(requestId, 1024))
     {
         qInfo() << "Ignoring duplicate request_id:"
                 << requestId
@@ -1692,12 +1686,6 @@ bool ChatServer::shouldIgnoreDuplicateRequest(
         return true;
     }
 
-    if (clientInfo.processedRequestIds.size() > 1024)
-    {
-        clientInfo.processedRequestIds.clear();
-    }
-
-    clientInfo.processedRequestIds.insert(requestId);
     return false;
 }
 
@@ -1885,10 +1873,10 @@ void ChatServer::broadcastJson(
         QTcpSocket *clientSocket =
             clientIt.key();
 
-        const ClientInfo &clientInfo =
+        const ClientSession &session =
             clientIt.value();
 
-        if (!clientInfo.loggedIn)
+        if (!session.loggedIn)
         {
             continue;
         }
@@ -1958,16 +1946,16 @@ QStringList ChatServer::onlineNicknames() const
          clientIt != m_clients.cend();
          ++clientIt)
     {
-        const ClientInfo &clientInfo =
+        const ClientSession &session =
             clientIt.value();
 
-        if (!clientInfo.loggedIn)
+        if (!session.loggedIn)
         {
             continue;
         }
 
         nicknames.append(
-            clientInfo.nickname);
+            session.nickname);
     }
 
     nicknames.sort(
@@ -1996,15 +1984,15 @@ QTcpSocket *ChatServer::findClientByNickname(
          clientIt != m_clients.cend();
          ++clientIt)
     {
-        const ClientInfo &clientInfo =
+        const ClientSession &session =
             clientIt.value();
 
-        if (!clientInfo.loggedIn)
+        if (!session.loggedIn)
         {
             continue;
         }
 
-        if (clientInfo.nickname.compare(
+        if (session.nickname.compare(
                 nickname,
                 Qt::CaseInsensitive) == 0)
         {
@@ -2028,15 +2016,15 @@ bool ChatServer::nicknameInUse(
             continue;
         }
 
-        const ClientInfo &clientInfo =
+        const ClientSession &session =
             clientIt.value();
 
-        if (!clientInfo.loggedIn)
+        if (!session.loggedIn)
         {
             continue;
         }
 
-        if (clientInfo.nickname.compare(
+        if (session.nickname.compare(
                 nickname,
                 Qt::CaseInsensitive) == 0)
         {

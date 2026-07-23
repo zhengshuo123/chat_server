@@ -1,6 +1,7 @@
 #ifndef CHATSERVER_H
 #define CHATSERVER_H
 
+#include "client_session.h"
 #include "persistence/sqliterepository.h"
 #include "services/authservice.h"
 
@@ -23,16 +24,6 @@ public:
     explicit ChatServer(quint16 port);
 
     bool start();
-
-private:
-    struct ClientInfo
-    {
-        QString nickname;
-        bool loggedIn = false;
-        QByteArray inputBuffer;
-        QDateTime lastActivityUtc;
-        QSet<QString> processedRequestIds;
-    };
 
     struct PendingUpload
     {
@@ -171,7 +162,7 @@ private:
         const QString &fileName) const;
 
 private:
-    QHash<QTcpSocket *, ClientInfo> m_clients;
+    QHash<QTcpSocket *, ClientSession> m_clients;
     QHash<QString, PendingUpload> m_pendingUploads;
 
     quint16 m_port;

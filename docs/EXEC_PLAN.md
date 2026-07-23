@@ -217,14 +217,22 @@
 - Server build, all server Qt Tests, and server Clazy were rerun successfully.
 - Client conversation and message state now inherit `QAbstractListModel` while preserving existing Widget rendering behavior.
 
+### Stage 30 - ClientSession State Split
+
+- Added a dedicated `ClientSession` class for per-connection socket state, login state, input buffer, activity time, and processed request IDs.
+- `ChatServer` now stores `ClientSession` instances instead of an internal `ClientInfo` struct.
+- Request-id deduplication and timeout checks now use `ClientSession` helper methods.
+- Server build, all server Qt Tests, and server Clazy passed.
+- Client build/tests, client Clazy, and Windows packaging recheck passed as compatibility checks.
+
 ## Next
 
-1. Split connection handling into `ClientSession`.
+1. Move JSON dispatch and socket signal wiring deeper into `ClientSession`.
 2. Add image thumbnail metadata if the server needs to advertise dimensions before download.
 3. Remove nickname-only login compatibility once migration is no longer needed.
 
 ## Honest Gaps
 
 - Live register/login is wired for password-based accounts; nickname-only login remains temporarily for migration and should be removed once the client no longer needs compatibility.
-- Server responsibilities are still concentrated in `ChatServer`.
+- `ClientSession` now owns connection state, but most server request handlers still live in `ChatServer`.
 - Clazy is not in `PATH`, but Qt Creator's bundled `clazy-standalone.exe` works when invoked with explicit MinGW target/include arguments.

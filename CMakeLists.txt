@@ -40,6 +40,8 @@ target_include_directories(chat_server_protocol PUBLIC
 
 add_executable(chat_server
     main.cpp
+    client_session.h
+    client_session.cpp
     chatserver.h
     chatserver.cpp
     persistence/sqliterepository.h
