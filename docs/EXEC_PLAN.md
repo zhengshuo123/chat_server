@@ -91,6 +91,12 @@
 - Server code was not changed in this client-only reconnect stage.
 - Server build and all server Qt Tests were rerun successfully.
 
+### Stage 13 - README and Client Packaging Checkpoint
+
+- Added `README.md` with build, test, run, current status, and known remaining work.
+- Server build and all server Qt Tests were rerun successfully.
+- Client packaging script was verified in the client repository.
+
 ## Next
 
 1. Add unread/read-state synchronization.
