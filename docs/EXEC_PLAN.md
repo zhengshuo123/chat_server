@@ -185,10 +185,21 @@
 - Server build, all server Qt Tests, and server Clazy passed.
 - Client build, all client Qt Tests, and client Clazy passed as the download-consumer checkpoint.
 
+### Stage 26 - Chunked File Upload
+
+- Added `file_upload_start`, `file_upload_chunk`, `file_upload_ready`, and `file_upload_progress` handling.
+- Server stores upload chunks directly on disk, validates offsets, enforces a 64 KB chunk size, and caps attachments at 50 MB.
+- Completed chunk uploads are persisted as file messages plus attachment metadata, then broadcast with `attachment_id`.
+- Incomplete upload files are deleted if the client disconnects or sends an invalid chunk.
+- Existing inline `file_message` handling remains for compatibility with older clients.
+- Server build, all server Qt Tests, and server Clazy passed.
+- Real TCP smoke test passed for register, chunked hall upload, `file_chat` attachment ID, and history lookup.
+- Client build, all client Qt Tests, client Clazy, and Windows packaging recheck passed as the upload producer checkpoint.
+
 ## Next
 
 1. Split connection handling into `ClientSession`.
-2. Replace bounded inline file payloads with chunked upload/download and real progress.
+2. Convert file download to chunked transfer with real download progress.
 3. Remove nickname-only login compatibility once migration is no longer needed.
 
 ## Honest Gaps

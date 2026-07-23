@@ -27,6 +27,8 @@ constexpr qint64 maxProtocolLineBytes =
 constexpr int maxNicknameLength = 20;
 constexpr int maxMessageLength = 500;
 constexpr qint64 maxInlineFileBytes = 512 * 1024;
+constexpr qint64 maxAttachmentBytes = 50 * 1024 * 1024;
+constexpr qint64 maxUploadChunkBytes = 64 * 1024;
 constexpr int connectionTimeoutSeconds = 45;
 
 QString currentTimestamp()
@@ -333,6 +335,45 @@ void ChatServer::handleJsonMessage(
             static_cast<qint64>(
                 normalizedObject
                     .value(QStringLiteral("size"))
+                    .toDouble()),
+            normalizedObject
+                .value(QStringLiteral("data_base64"))
+                .toString());
+
+        return;
+    }
+
+    if (type == QStringLiteral("file_upload_start"))
+    {
+        handleFileUploadStart(
+            clientSocket,
+            normalizedObject
+                .value(QStringLiteral("upload_id"))
+                .toString(),
+            normalizedObject
+                .value(QStringLiteral("target"))
+                .toString(),
+            normalizedObject
+                .value(QStringLiteral("file_name"))
+                .toString(),
+            static_cast<qint64>(
+                normalizedObject
+                    .value(QStringLiteral("size"))
+                    .toDouble()));
+
+        return;
+    }
+
+    if (type == QStringLiteral("file_upload_chunk"))
+    {
+        handleFileUploadChunk(
+            clientSocket,
+            normalizedObject
+                .value(QStringLiteral("upload_id"))
+                .toString(),
+            static_cast<qint64>(
+                normalizedObject
+                    .value(QStringLiteral("offset"))
                     .toDouble()),
             normalizedObject
                 .value(QStringLiteral("data_base64"))
@@ -1051,6 +1092,296 @@ void ChatServer::handleFileMessage(
     }
 }
 
+void ChatServer::handleFileUploadStart(
+    QTcpSocket *clientSocket,
+    const QString &uploadId,
+    const QString &targetNickname,
+    const QString &fileName,
+    qint64 size)
+{
+    auto senderIt =
+        m_clients.find(clientSocket);
+
+    if (senderIt == m_clients.end()
+        || !senderIt.value().loggedIn)
+    {
+        sendError(clientSocket, QStringLiteral("请先登录"));
+        return;
+    }
+
+    const QString trimmedUploadId =
+        uploadId.trimmed();
+    const QString trimmedFileName =
+        fileName.trimmed();
+    const QString trimmedTarget =
+        targetNickname.trimmed();
+
+    if (trimmedUploadId.isEmpty()
+        || trimmedFileName.isEmpty()
+        || size <= 0
+        || size > maxAttachmentBytes)
+    {
+        sendError(clientSocket, QStringLiteral("文件无效或超过 50 MB"));
+        return;
+    }
+
+    const ClientInfo &senderInfo =
+        senderIt.value();
+    QString conversationId =
+        QStringLiteral("hall");
+
+    if (!trimmedTarget.isEmpty())
+    {
+        QTcpSocket *targetSocket =
+            findClientByNickname(trimmedTarget);
+
+        if (targetSocket == nullptr)
+        {
+            sendError(clientSocket, QStringLiteral("私聊对象当前不在线"));
+            return;
+        }
+
+        conversationId =
+            directConversationId(senderInfo.nickname, trimmedTarget);
+
+        if (!m_repository.createConversation(
+                conversationId,
+                QStringLiteral("direct"),
+                QStringLiteral("%1 / %2")
+                    .arg(senderInfo.nickname, trimmedTarget)))
+        {
+            qWarning() << "Failed to ensure upload conversation:"
+                       << m_repository.lastError();
+        }
+
+        if (!m_repository.ensureConversationMember(
+                conversationId,
+                senderInfo.nickname)
+            || !m_repository.ensureConversationMember(
+                conversationId,
+                trimmedTarget))
+        {
+            qWarning() << "Failed to ensure upload members:"
+                       << m_repository.lastError();
+        }
+    }
+
+    const QString uploadKey =
+        QStringLiteral("%1:%2")
+            .arg(
+                reinterpret_cast<quintptr>(clientSocket))
+            .arg(trimmedUploadId);
+
+    if (m_pendingUploads.contains(uploadKey))
+    {
+        sendError(clientSocket, QStringLiteral("上传任务已存在"));
+        return;
+    }
+
+    const QString storagePath =
+        attachmentStoragePath(trimmedFileName);
+    QFile storageFile(storagePath);
+
+    if (!storageFile.open(QIODevice::WriteOnly | QIODevice::Truncate))
+    {
+        sendError(clientSocket, QStringLiteral("服务端创建附件文件失败"));
+        return;
+    }
+
+    storageFile.close();
+
+    m_pendingUploads.insert(
+        uploadKey,
+        PendingUpload{
+            clientSocket,
+            senderInfo.nickname,
+            trimmedTarget,
+            conversationId,
+            trimmedUploadId,
+            trimmedFileName,
+            storagePath,
+            size,
+            0});
+
+    QJsonObject responseObject;
+    responseObject.insert(QStringLiteral("type"), QStringLiteral("file_upload_ready"));
+    responseObject.insert(QStringLiteral("upload_id"), trimmedUploadId);
+    responseObject.insert(QStringLiteral("chunk_size"), maxUploadChunkBytes);
+
+    sendJson(clientSocket, responseObject);
+}
+
+void ChatServer::handleFileUploadChunk(
+    QTcpSocket *clientSocket,
+    const QString &uploadId,
+    qint64 offset,
+    const QString &base64Data)
+{
+    auto clientIt =
+        m_clients.find(clientSocket);
+
+    if (clientIt == m_clients.end()
+        || !clientIt.value().loggedIn)
+    {
+        sendError(clientSocket, QStringLiteral("请先登录"));
+        return;
+    }
+
+    const QString uploadKey =
+        QStringLiteral("%1:%2")
+            .arg(
+                reinterpret_cast<quintptr>(clientSocket))
+            .arg(uploadId.trimmed());
+
+    auto uploadIt =
+        m_pendingUploads.find(uploadKey);
+
+    if (uploadIt == m_pendingUploads.end())
+    {
+        sendError(clientSocket, QStringLiteral("上传任务不存在"));
+        return;
+    }
+
+    PendingUpload upload =
+        uploadIt.value();
+    const QByteArray chunkData =
+        QByteArray::fromBase64(base64Data.toLatin1());
+
+    if (offset != upload.received
+        || chunkData.isEmpty()
+        || chunkData.size() > maxUploadChunkBytes
+        || upload.received + chunkData.size() > upload.size)
+    {
+        QFile::remove(upload.storagePath);
+        m_pendingUploads.remove(uploadKey);
+        sendError(clientSocket, QStringLiteral("上传分块无效"));
+        return;
+    }
+
+    QFile storageFile(upload.storagePath);
+
+    if (!storageFile.open(QIODevice::WriteOnly | QIODevice::Append)
+        || storageFile.write(chunkData) != chunkData.size()
+        || !storageFile.flush())
+    {
+        storageFile.remove();
+        m_pendingUploads.remove(uploadKey);
+        sendError(clientSocket, QStringLiteral("服务端写入上传分块失败"));
+        return;
+    }
+
+    storageFile.close();
+    upload.received += chunkData.size();
+
+    QJsonObject progressObject;
+    progressObject.insert(QStringLiteral("type"), QStringLiteral("file_upload_progress"));
+    progressObject.insert(QStringLiteral("upload_id"), upload.uploadId);
+    progressObject.insert(QStringLiteral("received"), upload.received);
+    progressObject.insert(QStringLiteral("size"), upload.size);
+    sendJson(clientSocket, progressObject);
+
+    if (upload.received < upload.size)
+    {
+        uploadIt.value() = upload;
+        return;
+    }
+
+    m_pendingUploads.remove(uploadKey);
+    completeFileUpload(upload);
+}
+
+void ChatServer::completeFileUpload(
+    const PendingUpload &upload)
+{
+    QFile hashFile(upload.storagePath);
+
+    if (!hashFile.open(QIODevice::ReadOnly))
+    {
+        QFile::remove(upload.storagePath);
+        sendError(upload.ownerSocket, QStringLiteral("服务端读取附件失败"));
+        return;
+    }
+
+    QCryptographicHash hasher(QCryptographicHash::Sha256);
+
+    if (!hasher.addData(&hashFile))
+    {
+        QFile::remove(upload.storagePath);
+        sendError(upload.ownerSocket, QStringLiteral("服务端校验附件失败"));
+        return;
+    }
+
+    const QString sha256 =
+        QString::fromLatin1(hasher.result().toHex());
+
+    const qint64 messageId =
+        m_repository.appendMessageReturningId(
+            upload.conversationId,
+            upload.senderNickname,
+            QStringLiteral("file"),
+            upload.fileName,
+            QStringLiteral("sent"),
+            QDateTime::currentDateTimeUtc());
+
+    if (messageId == 0)
+    {
+        QFile::remove(upload.storagePath);
+        qWarning() << "Failed to persist uploaded file message:"
+                   << m_repository.lastError();
+        return;
+    }
+
+    if (!m_repository.addAttachment(
+            messageId,
+            upload.fileName,
+            QStringLiteral("application/octet-stream"),
+            upload.size,
+            upload.storagePath,
+            sha256))
+    {
+        QFile::remove(upload.storagePath);
+        qWarning() << "Failed to persist uploaded attachment:"
+                   << m_repository.lastError();
+        return;
+    }
+
+    QJsonObject fileChatObject;
+    fileChatObject.insert(QStringLiteral("type"), QStringLiteral("file_chat"));
+    fileChatObject.insert(QStringLiteral("from"), upload.senderNickname);
+    fileChatObject.insert(QStringLiteral("to"), upload.targetNickname);
+    fileChatObject.insert(QStringLiteral("file_name"), upload.fileName);
+    fileChatObject.insert(QStringLiteral("size"), upload.size);
+    fileChatObject.insert(QStringLiteral("timestamp"), currentTimestamp());
+    fileChatObject.insert(QStringLiteral("conversation_id"), upload.conversationId);
+    fileChatObject.insert(QStringLiteral("upload_id"), upload.uploadId);
+
+    const QList<SQLiteRepository::StoredMessage> persistedMessages =
+        m_repository.messagesForConversation(upload.conversationId, 1);
+
+    if (!persistedMessages.isEmpty())
+    {
+        fileChatObject.insert(
+            QStringLiteral("attachment_id"),
+            QString::number(persistedMessages.constLast().attachmentId));
+    }
+
+    if (upload.targetNickname.isEmpty())
+    {
+        broadcastJson(fileChatObject);
+        return;
+    }
+
+    QTcpSocket *targetSocket =
+        findClientByNickname(upload.targetNickname);
+
+    if (targetSocket != nullptr)
+    {
+        sendJson(targetSocket, fileChatObject);
+    }
+
+    sendJson(upload.ownerSocket, fileChatObject);
+}
+
 void ChatServer::handleFileDownload(
     QTcpSocket *clientSocket,
     qint64 attachmentId)
@@ -1364,6 +1695,19 @@ void ChatServer::handleDisconnected(
 
         wasLoggedIn =
             clientIt.value().loggedIn;
+    }
+
+    for (auto uploadIt = m_pendingUploads.begin();
+         uploadIt != m_pendingUploads.end();)
+    {
+        if (uploadIt.value().ownerSocket != clientSocket)
+        {
+            ++uploadIt;
+            continue;
+        }
+
+        QFile::remove(uploadIt.value().storagePath);
+        uploadIt = m_pendingUploads.erase(uploadIt);
     }
 
     const QString address =

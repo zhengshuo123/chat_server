@@ -34,6 +34,19 @@ private:
         QSet<QString> processedRequestIds;
     };
 
+    struct PendingUpload
+    {
+        QTcpSocket *ownerSocket = nullptr;
+        QString senderNickname;
+        QString targetNickname;
+        QString conversationId;
+        QString uploadId;
+        QString fileName;
+        QString storagePath;
+        qint64 size = 0;
+        qint64 received = 0;
+    };
+
 private:
     void handleNewConnections();
 
@@ -76,6 +89,22 @@ private:
         const QString &fileName,
         qint64 size,
         const QString &base64Data);
+
+    void handleFileUploadStart(
+        QTcpSocket *clientSocket,
+        const QString &uploadId,
+        const QString &targetNickname,
+        const QString &fileName,
+        qint64 size);
+
+    void handleFileUploadChunk(
+        QTcpSocket *clientSocket,
+        const QString &uploadId,
+        qint64 offset,
+        const QString &base64Data);
+
+    void completeFileUpload(
+        const PendingUpload &upload);
 
     void handleFileDownload(
         QTcpSocket *clientSocket,
@@ -143,6 +172,7 @@ private:
 
 private:
     QHash<QTcpSocket *, ClientInfo> m_clients;
+    QHash<QString, PendingUpload> m_pendingUploads;
 
     quint16 m_port;
     QTcpServer m_server;
