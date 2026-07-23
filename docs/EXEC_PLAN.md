@@ -125,6 +125,12 @@
 - Server build and all server Qt Tests passed.
 - End-to-end TCP smoke test passed for register, hall message, history, `mark_read`, and `read_state unread_count = 0`.
 
+### Stage 18 - Client SQLite Cache Checkpoint
+
+- Server code was not changed in this client-focused local persistence stage.
+- Server build and all server Qt Tests were rerun successfully.
+- Client build and Qt Tests passed, including the new `clientrepository` SQLite cache tests.
+
 ## Next
 
 1. Split connection handling into `ClientSession`.
