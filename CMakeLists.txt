@@ -2,21 +2,38 @@ cmake_minimum_required(VERSION 3.16)
 
 project(chat_server LANGUAGES CXX)
 
+enable_testing()
+
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS
     Core
     Network
+    Test
 )
 
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS
     Core
     Network
+    Test
+)
+
+add_library(chat_server_protocol STATIC
+    protocol/protocolcodec.h
+    protocol/protocolcodec.cpp
+)
+
+target_link_libraries(chat_server_protocol PUBLIC
+    Qt${QT_VERSION_MAJOR}::Core
+)
+
+target_include_directories(chat_server_protocol PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 add_executable(chat_server
@@ -26,8 +43,24 @@ add_executable(chat_server
 )
 
 target_link_libraries(chat_server PRIVATE
+    chat_server_protocol
     Qt${QT_VERSION_MAJOR}::Core
     Qt${QT_VERSION_MAJOR}::Network
+)
+
+add_executable(tst_protocolcodec
+    tests/tst_protocolcodec.cpp
+)
+
+target_link_libraries(tst_protocolcodec PRIVATE
+    chat_server_protocol
+    Qt${QT_VERSION_MAJOR}::Core
+    Qt${QT_VERSION_MAJOR}::Test
+)
+
+add_test(
+    NAME protocolcodec
+    COMMAND tst_protocolcodec
 )
 
 include(GNUInstallDirs)
