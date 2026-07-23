@@ -233,6 +233,12 @@
 - Server build, all server Qt Tests, and server Clazy passed.
 - Client build/tests, client Clazy, and Windows packaging recheck passed as compatibility checks.
 
+### Stage 32 - Client Preview Isolation Checkpoint
+
+- Server code was not changed in this client-focused UI/cache cleanup stage.
+- Server build, all server Qt Tests, and server Clazy were rerun successfully.
+- Client no longer sends history/read requests for preview-only conversations that do not exist on the server.
+
 ## Next
 
 1. Move JSON dispatch and socket signal wiring deeper into `ClientSession`.
