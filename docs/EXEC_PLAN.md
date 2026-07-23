@@ -205,10 +205,16 @@
 - Real TCP smoke test passed for chunked upload, chunked download, and byte-for-byte attachment round trip.
 - Client build, all client Qt Tests, client Clazy, and Windows packaging recheck passed as the download consumer checkpoint.
 
+### Stage 28 - Client Image Thumbnail Checkpoint
+
+- Server code was not changed in this client-focused rendering stage.
+- Server build, all server Qt Tests, and server Clazy were rerun successfully.
+- Client now renders thumbnails for locally cached image attachments while preserving generic cards for other files.
+
 ## Next
 
 1. Split connection handling into `ClientSession`.
-2. Add image thumbnail metadata/generation for image attachments.
+2. Add image thumbnail metadata if the server needs to advertise dimensions before download.
 3. Remove nickname-only login compatibility once migration is no longer needed.
 
 ## Honest Gaps
