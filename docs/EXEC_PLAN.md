@@ -110,6 +110,12 @@
 - Duplicate `register`, `message`, `private_message`, and `file_message` requests are ignored after the first successful dispatch path starts.
 - End-to-end TCP smoke test passed: two messages with the same `request_id` produce one persisted hall message.
 
+### Stage 16 - Client UI Rendering Polish Checkpoint
+
+- Server code was not changed in this client-focused UI rendering stage.
+- Server build and all server Qt Tests were rerun successfully.
+- Client main-window screenshots and right-panel collapse tests passed.
+
 ## Next
 
 1. Add unread/read-state synchronization.
@@ -120,7 +126,6 @@
 ## Honest Gaps
 
 - The new protocol module is tested but not yet wired into live networking.
-- Persistence foundation exists, but it is not yet wired into live `ChatServer` message/auth flows.
 - Live register/login is wired for password-based accounts; nickname-only login remains temporarily for migration and should be removed once the client no longer needs compatibility.
 - Server responsibilities are still concentrated in `ChatServer`.
-- Clazy was attempted with Qt Creator's bundled `clazy-standalone.exe`, but the local Clang tooling failed before project analysis on MinGW system headers. This remains an environment/toolchain setup item; MinGW compilation itself succeeds.
+- Clazy is not currently available in `PATH`; an earlier Qt Creator bundled `clazy-standalone.exe` attempt failed before project analysis on MinGW system headers. This remains an environment/toolchain setup item; MinGW compilation itself succeeds.
