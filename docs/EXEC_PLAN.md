@@ -153,6 +153,15 @@
 - Server build and all server Qt Tests were rerun successfully.
 - Client now queues runtime local SQLite writes to a dedicated worker thread.
 
+### Stage 22 - Clazy Verification
+
+- Located Qt Creator's bundled `clazy-standalone.exe`.
+- Reconfigured the server build with `CMAKE_EXPORT_COMPILE_COMMANDS=ON`.
+- Ran Clazy with explicit MinGW target/include arguments over `ChatServer`, repository, auth service, and protocol codec sources.
+- Server build and all server Qt Tests passed.
+- Server Clazy completed with no project warnings.
+- Client build, client Qt Tests, and client Clazy completed with no project warnings.
+
 ## Next
 
 1. Split connection handling into `ClientSession`.
@@ -164,4 +173,4 @@
 - The new protocol module is tested but not yet wired into live networking.
 - Live register/login is wired for password-based accounts; nickname-only login remains temporarily for migration and should be removed once the client no longer needs compatibility.
 - Server responsibilities are still concentrated in `ChatServer`.
-- Clazy is not currently available in `PATH`; an earlier Qt Creator bundled `clazy-standalone.exe` attempt failed before project analysis on MinGW system headers. This remains an environment/toolchain setup item; MinGW compilation itself succeeds.
+- Clazy is not in `PATH`, but Qt Creator's bundled `clazy-standalone.exe` works when invoked with explicit MinGW target/include arguments.
